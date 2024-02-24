@@ -2,5 +2,5 @@
 #include "RUDP_API.h"
 
 int main() {
-    printf("RUDP");
+    printf("RUDP_API");
 }

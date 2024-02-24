@@ -38,10 +38,10 @@ RUDP_Sender.o: RUDP_Sender.c RUDP_API.h
 	$(CC) $(CFL) -c $<
 
 RUDP_API.a: RUDP_API.o
-	$(AR) $(LFL) $@ $<
+	$(AR) $(LFL) $@ $^
 
-RUDP_API.o: RUDP.c RUDP_API.h
+RUDP_API.o: RUDP_API.c RUDP_API.h
 	$(CC) $(CFL) -c $<
 
 clean:
-	rm -f *.o *.a part1 part2
+	rm -f *.o *.a TCP_Receiver TCP_Sender RUDP_API RUDP_Receiver RUDP_Sender
