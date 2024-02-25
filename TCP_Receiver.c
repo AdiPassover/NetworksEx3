@@ -90,7 +90,7 @@ int main(int argc, char* argv[]) {
             gettimeofday(&start, NULL);
             int bytes_received = recv(client_sock, buffer, FILE_SIZE, 0);
             totalRecv += bytes_received;
-            if (buffer[0]=='e'&&buffer[1]=='x'&&buffer[2]=='i'&&buffer[3]=='t' && bytes_received < 10) { // TODO: change
+            if (buffer[0]=='e'&&buffer[1]=='x'&&buffer[2]=='i'&&buffer[3]=='t' && bytes_received < 10) {
                 puts("Sender sent exit message.\n");
                 printStats(times, speeds, currentRun);
                 close(client_sock);
