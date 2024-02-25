@@ -33,6 +33,7 @@ char *util_generate_random_data(unsigned int size) {
 
 int main(int argc, char *argv[]) {
     char *file = util_generate_random_data(FILE_SIZE);
+    puts("Starting Sender...\n");
 
     char *SERVER_IP = (char *) malloc(sizeof(char) * (16));
     int port;
@@ -46,9 +47,7 @@ int main(int argc, char *argv[]) {
     struct sockaddr_in senderAdress;
     memset(&senderAdress, 0, sizeof(senderAdress));
     senderAdress.sin_family = AF_INET;
-    senderAdress.sin_addr.s_addr = INADDR_ANY;
     senderAdress.sin_port = htons(port);
-
     int socketfd = -1;
     socketfd = socket(AF_INET, SOCK_STREAM, 0);
     if (socketfd == -1) {
@@ -65,19 +64,21 @@ int main(int argc, char *argv[]) {
     }
     free(algo);
 
+
     if (inet_pton(AF_INET, SERVER_IP, &senderAdress.sin_addr) <= 0) {
         perror("inet_pton(3)");
         close(socketfd);
         free(SERVER_IP);
         return 1;
     }
-
     if (connect(socketfd, (struct sockaddr *) &senderAdress, sizeof(senderAdress)) < 0) {
+        puts("failed");
         perror("connect(2)");
         close(socketfd);
         free(SERVER_IP);
         return 1;
     }
+    puts("sending file");
 
     long bytes_sent = send(socketfd, file, FILE_SIZE, 0);
     if (bytes_sent <= 0) {
@@ -86,11 +87,12 @@ int main(int argc, char *argv[]) {
         free(SERVER_IP);
         return 1;
     }
+    puts("file sent");
     int input = -1;
 
     while (input) {
 
-        printf("Press 1 to resend the file, press 0 to exit.");
+        puts("Press 1 to resend the file, press 0 to exit.");
         scanf("%d", &input);
         if (input == 1) {
             bytes_sent = send(socketfd, file, FILE_SIZE, 0);
@@ -116,7 +118,7 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    free(SERVER_IP);
+    //free(SERVER_IP);
     return 0;
 }
 

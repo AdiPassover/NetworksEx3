@@ -1,6 +1,6 @@
 CC = gcc
 AR = ar
-CFL = -Wall -g
+CFL = -g -Wall
 LFL = rcs
 PART_ONE = TCP_Receiver TCP_Sender
 PART_TWO = RUDP_API RUDP_Receiver RUDP_Sender

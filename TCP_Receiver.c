@@ -17,24 +17,21 @@
 void printStats(double times[100], double speeds[100], int run);
 
 int main(int argc, char* argv[]) {
-    printf("Starting Reciver...\n");
+    puts("Starting Receiver...\n");
     if (argc != 5) {
-        printf("invalid command");
+        puts("invalid command");
         return 1;
     }
-    int port;
+    int port = 0;
     char algo[10] = {0};
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "-p") == 0) {
-            printf("%d\n",atoi(argv[i + 1]));
             port = atoi(argv[i + 1]);
         }
         else if (strcmp(argv[i], "-algo") == 0) {
-            printf("%s\n",argv[i + 1]);
-           strcpy(algo, argv[i + 1]);
+            strcpy(algo, argv[i + 1]);
         }
     }
-    return 0;
 
     struct sockaddr_in receiverAddress, senderAddress;
     struct timeval start, end;
@@ -75,7 +72,8 @@ int main(int argc, char* argv[]) {
     double speeds[MAX_RUNS];
     int currentRun = 1;
 
-    printf("Waiting for TCP connection...");
+    puts("Waiting for TCP connection...");
+
 
     while (1) {
 
@@ -85,21 +83,26 @@ int main(int argc, char* argv[]) {
             close(socketfd);
             return 1;
         }
-        char *buffer[FILE_SIZE] = {0};
+        puts("Sender connected, beginning to receive file...\n");
+        char buffer[FILE_SIZE] = {0};
+        int totalRecv = 0;
         while (currentRun < MAX_RUNS) {
-            printf("Sender connected, beginning to receive file...\n");
             gettimeofday(&start, NULL);
             int bytes_received = recv(client_sock, buffer, FILE_SIZE, 0);
-            gettimeofday(&end, NULL);
-
-            if (strcmp((const char *) buffer, "exit") == 0) {
-                printf("Sender sent exit message.\n");
+            totalRecv += bytes_received;
+            if (buffer[0]=='e'&&buffer[1]=='x'&&buffer[2]=='i'&&buffer[3]=='t' && bytes_received < 10) { // TODO: change
+                puts("Sender sent exit message.\n");
                 printStats(times, speeds, currentRun);
                 close(client_sock);
                 close(socketfd);
                 exit(1);
             }
-            printf("File transfer completed.\n");
+            if (totalRecv != FILE_SIZE) {
+                continue;
+            }
+            totalRecv = 0;
+            gettimeofday(&end, NULL);
+            puts("File transfer completed.\n");
 
             if (bytes_received < 0) {
                 perror("recv(2)");
@@ -112,9 +115,10 @@ int main(int argc, char* argv[]) {
             times[currentRun] += (end.tv_usec - start.tv_usec) / 1000.0;
             speeds[currentRun] = (bytes_received / times[currentRun]) / 1000;
             currentRun++;
-            printf("Waiting for Sender response...");
+            puts("Waiting for Sender response...");
         }
     }
+
     return 0;
 }
 
@@ -123,8 +127,8 @@ void printStats(double times[100], double speeds[100], int run) {
     double sum1 = 0;
     double avgTime = 0;
     double avgSpeed = 0;
-    printf("--------------------------------------------\n");
-    printf("(*) Times summary:\n\n");
+    puts("--------------------------------------------\n");
+    puts("(*) Times summary:\n\n");
     for (int i = 1; i < run; i++) {
         timeSum += times[i];
         printf("(*) Run %d, Time: %0.3lf ms\n", i, times[i]);
@@ -132,11 +136,11 @@ void printStats(double times[100], double speeds[100], int run) {
     printf("\n(*) Speeds summary:\n\n");
     for (int i = 1; i < run; i++) {
         sum1 += speeds[i];
-        printf("(*) Run %d, Speed: %0.3lf KiB/s\n", i, speeds[i]);
+        printf("(*) Run %d, Speed: %0.3lf MB/s\n", i, speeds[i]);
     }
     if (run > 0) {
-        avgTime = (timeSum / (double) run);
-        avgSpeed = (sum1 / (double) run);
+        avgTime = (timeSum / (double) (run-1));
+        avgSpeed = (sum1 / (double) (run-1));
     }
     printf("\n(*) Time avarages:\n");
     printf("(*) Avarage transfer time for whole file: %0.3lf ms\n", avgTime);
