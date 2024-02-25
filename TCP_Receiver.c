@@ -86,8 +86,12 @@ int main(int argc, char* argv[]) {
         puts("Sender connected, beginning to receive file...\n");
         char buffer[FILE_SIZE] = {0};
         int totalRecv = 0;
+        int first = 1;
         while (currentRun < MAX_RUNS) {
-            gettimeofday(&start, NULL);
+            if (first) {
+                gettimeofday(&start, NULL);
+                first = 0;
+            }
             int bytes_received = recv(client_sock, buffer, FILE_SIZE, 0);
             totalRecv += bytes_received;
             if (buffer[0]=='e'&&buffer[1]=='x'&&buffer[2]=='i'&&buffer[3]=='t' && bytes_received < 10) {
@@ -101,6 +105,7 @@ int main(int argc, char* argv[]) {
                 continue;
             }
             totalRecv = 0;
+            first = 1;
             gettimeofday(&end, NULL);
             puts("File transfer completed.\n");
 
@@ -113,7 +118,7 @@ int main(int argc, char* argv[]) {
 
             times[currentRun] = (end.tv_sec - start.tv_sec) * 1000.0;
             times[currentRun] += (end.tv_usec - start.tv_usec) / 1000.0;
-            speeds[currentRun] = (bytes_received / times[currentRun]) / 1000;
+            speeds[currentRun] = (FILE_SIZE / times[currentRun]) / 1000;
             currentRun++;
             puts("Waiting for Sender response...");
         }
