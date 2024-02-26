@@ -38,6 +38,10 @@ int main(int argc, char *argv[]) {
     char *SERVER_IP = (char *) malloc(sizeof(char) * (16));
     int port;
     char *algo = (char *) malloc(sizeof(char) * 10);
+    if (argc != 7) {
+        puts("invalid command");
+        return 1;
+    }
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "-p") == 0) { port = atoi(argv[i + 1]); }
         else if (strcmp(argv[i], "-ip") == 0) { strcpy(SERVER_IP, argv[i + 1]); }

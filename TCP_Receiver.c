@@ -8,6 +8,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <sys/time.h>
+#include <arpa/inet.h>
 
 
 #define FILE_SIZE 2000000
@@ -39,7 +40,7 @@ int main(int argc, char* argv[]) {
     memset(&receiverAddress, 0, sizeof(receiverAddress));
     memset(&senderAddress, 0, sizeof(senderAddress));
     receiverAddress.sin_family = AF_INET;
-    receiverAddress.sin_addr.s_addr = INADDR_ANY;
+    receiverAddress.sin_addr.s_addr = inet_addr("127.0.0.1");
     receiverAddress.sin_port = htons(port);
 
     int socketfd = -1;

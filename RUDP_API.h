@@ -1,8 +1,25 @@
 #pragma once
-
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <arpa/inet.h>
+#include <sys/time.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <errno.h>
 #include <unistd.h>
 #include <stdio.h>
 #include <sys/socket.h>
+
+#define MAXLINE 1024
+#define FLAG_ACK 1
+#define FLAG_SYN 2
+#define FLAG_FIN 4
+
+
+struct _RudpPacket;
+typedef struct _RudpPacket RudpPacket;
 
 /*
  * Creating a RUDP socket and creating a handshake between two peers.
@@ -13,18 +30,16 @@ int rudp_socket();
  * Sending data to the peer. The function should wait for an
  * acknowledgment packet, and if it didn’t receive any, retransmits the data.
  */
-ssize_t rudp_send(int socketfd, const void *buffer, size_t msgSize, int flags);
+ssize_t rudp_send(int sockfd, const RudpPacket *rudp_packet,const struct sockaddr_in* servaddr, socklen_t addrlen);
 
 /*
  * Receive data from a peer.
  */
-ssize_t rudp_rcv(int socketfd, void *buffer, size_t msgSize, int flags);
-
+ssize_t rudp_rcv(int socketfd, const RudpPacket *rudp_packet, struct sockaddr_in *src_addr, socklen_t *addrlen);
 /*
  * Closes a connection between peers.
  */
-void rudp_close(int socketfd);
-
+void rudp_close(int sockfd, struct sockaddr_in *dest_addr, socklen_t *addrlen) ;
 /*
 * @brief A checksum function that returns 16 bit checksum for data.
 * @param data The data to do the checksum for.
