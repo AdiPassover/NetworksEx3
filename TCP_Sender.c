@@ -52,7 +52,8 @@ int main(int argc, char *argv[]) {
     memset(&senderAdress, 0, sizeof(senderAdress));
     senderAdress.sin_family = AF_INET;
     senderAdress.sin_port = htons(port);
-    int socketfd = -1;
+
+    int socketfd = -1; // Initializing the socket
     socketfd = socket(AF_INET, SOCK_STREAM, 0);
     if (socketfd == -1) {
         perror("socket(2)");
@@ -60,6 +61,8 @@ int main(int argc, char *argv[]) {
         free(algo);
         exit(1);
     }
+
+    // Setting the CC algo to the input algo.
     if (setsockopt(socketfd, IPPROTO_TCP, TCP_CONGESTION, algo, strlen(algo)) != 0) {
         perror("setsockopt(2)");
         free(SERVER_IP);
@@ -69,13 +72,13 @@ int main(int argc, char *argv[]) {
     free(algo);
 
 
-    if (inet_pton(AF_INET, SERVER_IP, &senderAdress.sin_addr) <= 0) {
+    if (inet_pton(AF_INET, SERVER_IP, &senderAdress.sin_addr) <= 0) { // converting the IP address
         perror("inet_pton(3)");
         close(socketfd);
         free(SERVER_IP);
         return 1;
     }
-    if (connect(socketfd, (struct sockaddr *) &senderAdress, sizeof(senderAdress)) < 0) {
+    if (connect(socketfd, (struct sockaddr *) &senderAdress, sizeof(senderAdress)) < 0) { // connecting to receiver
         puts("failed");
         perror("connect(2)");
         close(socketfd);
@@ -107,22 +110,21 @@ int main(int argc, char *argv[]) {
                 return 1;
             }
         }
-        else{
-            bytes_sent = send(socketfd, "exit", 4, 0);
-            if (bytes_sent <= 0)
-            {
-                perror("send(2)");
-                close(socketfd);
-                free(SERVER_IP);
-                return 1;
-            }
-            close(socketfd);
-            free(SERVER_IP);
-            return 0;
+        else if (input != 0) {
+            puts("Invalid input.");
         }
     }
 
-    //free(SERVER_IP);
+    bytes_sent = send(socketfd, "exit", 4, 0);
+    if (bytes_sent <= 0)
+    {
+        perror("send(2)");
+        close(socketfd);
+        free(SERVER_IP);
+        return 1;
+    }
+    close(socketfd);
+    free(SERVER_IP);
     return 0;
 }
 

@@ -1,35 +1,28 @@
 #include "RUDP_API.h"
 
-typedef struct _RudpPacket {
-    uint16_t length;
-    uint16_t checksum;
-    uint8_t flags;
-    int seq_num;
-    char data[MAXLINE];
-} RudpPacket;
 
 int rudp_socket() {
     return socket(AF_INET, SOCK_DGRAM, 0);
 }
 
 ssize_t rudp_send(int sockfd, const RudpPacket *rudp_packet,const struct sockaddr_in* servaddr, socklen_t addrlen){
-    return sendto(sockfd, (const char *)rudp_packet, sizeof(RudpPacket) + rudp_packet->length, 0, servaddr, addrlen);
+    return sendto(sockfd, (const char *)rudp_packet, sizeof(RudpPacket) + rudp_packet->length, 0,(const struct sockaddr *) servaddr, addrlen);
 }
 
-ssize_t rudp_rcv(int socketfd, const RudpPacket *rudp_packet, struct sockaddr_in *src_addr, socklen_t *addrlen) {
-    return recvfrom(socketfd, rudp_packet, sizeof(RudpPacket) + rudp_packet->length, 0, src_addr, addrlen);
+ssize_t rudp_rcv(int socketfd, RudpPacket *rudp_packet, struct sockaddr_in *src_addr, socklen_t *addrlen) {
+    return recvfrom(socketfd, rudp_packet, sizeof(RudpPacket) + rudp_packet->length, 0, (struct sockaddr *) src_addr, addrlen);
 }
 
-int rudp_open(int sockfd, struct sockaddr_in *dest_addr, socklen_t addrlen) {
+int rudp_connect(int sockfd, struct sockaddr_in *dest_addr, socklen_t addrlen) {
     RudpPacket syn_packet, synack_packet, ack_packet;
-    socklen_t len = addrlen;
+    socklen_t* len = NULL;
 
     // Prepare SYN packet
     syn_packet.length = htons(0); // No data in SYN packet
     syn_packet.flags = FLAG_SYN;
     syn_packet.seq_num = 0;
 
-    // Send SYN packet
+    // Send SYN packet TODO: add a timer
     if (rudp_send(sockfd, &syn_packet, (const struct sockaddr_in *) dest_addr, addrlen) < 0) {
         perror("sendto failed");
         return -1;
@@ -38,7 +31,7 @@ int rudp_open(int sockfd, struct sockaddr_in *dest_addr, socklen_t addrlen) {
     printf("Sent SYN packet\n");
 
     // Receive SYNACK packet
-    if (rudp_rcv(sockfd, &synack_packet, dest_addr, &len) < 0) {
+    if (rudp_rcv(sockfd, &synack_packet, dest_addr, len) < 0) {
         perror("recvfrom failed");
         return -1;
     }
@@ -71,8 +64,8 @@ int rudp_accept(int sockfd, struct sockaddr_in *dest_addr, socklen_t addrlen) {
     RudpPacket syn_packet, synack_packet, ack_packet;
     socklen_t* len = NULL;
 
-    // Send SYN packet
-    if (rudp_rcv(sockfd, &syn_packet, (const struct sockaddr_in *) dest_addr, len) < 0) {
+    // Receive SYN packet
+    if (rudp_rcv(sockfd, &syn_packet, dest_addr, len) < 0) {
         perror("rcv failed");
         return -1;
     }
@@ -106,7 +99,7 @@ int rudp_accept(int sockfd, struct sockaddr_in *dest_addr, socklen_t addrlen) {
 
     printf("Received ACK packet\n");
 
-    // Check if it's a valid SYNACK packet
+    // Check if it's a valid ACK packet
     if (ack_packet.flags & FLAG_ACK) {
         //printf("Connection established successfully\n");
         return 0; // Handshake successful
@@ -115,9 +108,40 @@ int rudp_accept(int sockfd, struct sockaddr_in *dest_addr, socklen_t addrlen) {
     return -1; // Handshake failed
 }
 
-int rudp_close(int sockfd, struct sockaddr_in *dest_addr, socklen_t *addrlen) {
+int rudp_close(int sockfd, struct sockaddr_in *dest_addr, socklen_t addrlen) {
     RudpPacket fin_packet, ack_packet;
-    return 0;
+
+    socklen_t* len = NULL;
+
+    // Prepare FIN packet
+    fin_packet.length = htons(0); // No data in SYN packet
+    fin_packet.flags = FLAG_FIN;
+    fin_packet.seq_num = 0;
+
+    // Send FIN packet
+    if (rudp_send(sockfd, &fin_packet, (const struct sockaddr_in *) dest_addr, addrlen) < 0) {
+        perror("sendto failed");
+        return -1;
+    }
+
+    printf("Sent FIN packet\n");
+
+    // Receive ACK packet
+    if (rudp_rcv(sockfd, &ack_packet, dest_addr, len) < 0) {
+        perror("recvfrom failed");
+        return -1;
+    }
+
+    printf("Received ACK packet\n");
+
+    // Check if it's a valid ACK packet
+    if (ack_packet.flags & FLAG_ACK) {
+        //printf("Closing closed successfully\n");
+        close(sockfd);
+        return 0; // Closing successful
+    }
+    //printf("Closing failed\n");
+    return -1; // Closing failed
 }
 
 unsigned short int calculate_checksum(void *data, unsigned int bytes) {

@@ -39,11 +39,26 @@ ssize_t rudp_send(int sockfd, const RudpPacket *rudp_packet,const struct sockadd
 /*
  * Receive data from a peer.
  */
-ssize_t rudp_rcv(int socketfd, const RudpPacket *rudp_packet, struct sockaddr_in *src_addr, socklen_t *addrlen);
+ssize_t rudp_rcv(int socketfd, RudpPacket *rudp_packet, struct sockaddr_in *src_addr, socklen_t *addrlen);
+
 /*
- * Closes a connection between peers.
+ * Accept a connection from a peer
+ * Returns 0 if success.
  */
-int rudp_close(int sockfd, struct sockaddr_in *dest_addr, socklen_t *addrlen) ;
+int rudp_accept(int sockfd, struct sockaddr_in *dest_addr, socklen_t addrlen);
+
+/*
+ * Offer a handshake in order to establish a connection with a peer.
+ * Returns 0 if success.
+ */
+int rudp_connect(int sockfd, struct sockaddr_in *dest_addr, socklen_t addrlen);
+
+/*
+ * Closes a connection from a peer
+ * Returns 0 if success.
+ */
+int rudp_close(int sockfd, struct sockaddr_in *dest_addr, socklen_t addrlen);
+
 /*
 * @brief A checksum function that returns 16 bit checksum for data.
 * @param data The data to do the checksum for.
@@ -57,7 +72,3 @@ int rudp_close(int sockfd, struct sockaddr_in *dest_addr, socklen_t *addrlen) ;
 * You can also use this function as such without any change.
 */
 unsigned short int calculate_checksum(void *data, unsigned int bytes);
-/* accept a connection from a peer */
-int rudp_accept(int sockfd, struct sockaddr_in *dest_addr, socklen_t addrlen);
-/*open connection from sender*/
-int rudp_open(int sockfd, struct sockaddr_in *dest_addr, socklen_t addrlen);

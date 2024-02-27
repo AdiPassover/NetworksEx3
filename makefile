@@ -3,7 +3,7 @@ AR = ar
 CFL = -g -Wall
 LFL = rcs
 PART_ONE = TCP_Receiver TCP_Sender
-PART_TWO = RUDP_API RUDP_Receiver RUDP_Sender
+PART_TWO = RUDP_API.a RUDP_Receiver RUDP_Sender
 .PHONY: all clean
 
 all: part1 part2
@@ -24,7 +24,6 @@ TCP_Sender: TCP_Sender.o
 TCP_Sender.o: TCP_Sender.c
 	$(CC) $(CFL) -c $<
 
-
 RUDP_Receiver: RUDP_Receiver.o RUDP_API.a
 	$(CC) $(CFL) $^ -o $@
 
@@ -44,4 +43,4 @@ RUDP_API.o: RUDP_API.c RUDP_API.h
 	$(CC) $(CFL) -c $<
 
 clean:
-	rm -f *.o *.a TCP_Receiver TCP_Sender RUDP_API RUDP_Receiver RUDP_Sender
+	rm -f *.o *.a TCP_Receiver TCP_Sender RUDP_Receiver RUDP_Sender

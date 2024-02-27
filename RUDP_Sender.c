@@ -1,8 +1,14 @@
 #include <stdio.h>
+#include <time.h>
 #include <string.h>
-#include <stdlib.h>
 #include <netinet/in.h>
+#include <netinet/tcp.h>
+#include <arpa/inet.h>
+#include "stdlib.h"
+#include <sys/socket.h>
+#include <unistd.h>
 #include "RUDP_API.h"
+
 #define FILE_SIZE 2000000
 
 /*
@@ -25,8 +31,8 @@ char *util_generate_random_data(unsigned int size) {
         *(buffer + i) = ((unsigned int) rand() % 256);
     return buffer;
 }
-int main(int argc, char *argv[])
-{
+int main(int argc, char *argv[]) {
+    puts("Starting Sender...\n");
     int seqnum = 0;
     if (argc != 5)
     {
@@ -68,13 +74,18 @@ int main(int argc, char *argv[])
     
 
     //bind socket to port
-    if (bind(sockfd, (struct sockaddr *)&receiver_addr, sizeof(receiver_addr)) < 0)
-    {
-        perror("Bind failed");
-        exit(EXIT_FAILURE);
-    }
+//    if (bind(sockfd, (struct sockaddr *)&receiver_addr, sizeof(receiver_addr)) < 0)
+//    {
+//        perror("Bind failed");
+//        exit(EXIT_FAILURE);
+//    }
     // Perform handshake
-   if(seqnum = rudp_open(sockfd, &receiver_addr, sizeof(receiver_addr)==-1)) return -1;
+    seqnum = rudp_connect(sockfd, &receiver_addr, sizeof(receiver_addr));
+    if (seqnum < 0) {
+        perror("connection failed");
+        return -1;
+    }
+    puts("Connected successfully");
     // Send data 
     RudpPacket *packet = (RudpPacket *)malloc(sizeof(RudpPacket));
     packet->seq_num = seqnum;
@@ -82,21 +93,23 @@ int main(int argc, char *argv[])
     packet->checksum = 1024;
     packet->length = 1024;
     u_int8_t acked = 0;
+    socklen_t *len = NULL; // saving the length we don't cate about
     for(int i = 0; i < FILE_SIZE; i+=1024){
         memcpy(packet->data, file+i, 1024);
-        if(rudp_send(sockfd, &packet, &receiver_addr, sizeof(receiver_addr))==-1){
+        if(rudp_send(sockfd, (const RudpPacket *) &packet, &receiver_addr, sizeof(receiver_addr)) == -1){
             perror("sendto failed");
             free(packet);
             return -1;
         }
         printf("Sent packet %d\n", i/1024);
-        while (!acked){
-            if(rudp_rcv(sockfd, packet, &receiver_addr, sizeof(receiver_addr))==-1){
+        while (!acked) {
+            int bytes_received = rudp_rcv(sockfd, packet, &receiver_addr, len);
+            if (bytes_received < 0) {
                 perror("recvfrom failed");
                 free(packet);
                 return -1;
             }
-            if(packet->flags & FLAG_ACK && packet->seq_num == ++seqnum){
+            if ((packet->flags & FLAG_ACK) && (packet->seq_num == ++seqnum)) {
                 acked = 1;
                 printf("Received ACK for packet %d\n", i/1024);
             }
@@ -104,21 +117,13 @@ int main(int argc, char *argv[])
         acked = 0;
     }
     //finish sending, and recieve the last ack, close the rudp connection
-    packet->flags = FLAG_FIN;
+    //packet->flags = FLAG_FIN;
     if(rudp_close(sockfd, &receiver_addr, sizeof(receiver_addr))==-1){
         perror("close failed");
         free(packet);
         return -1;
     }
+
     free(packet);
-
-
-
-
-
-   
-
-    
-   
     return 0;
 }
