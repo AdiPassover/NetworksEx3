@@ -50,7 +50,7 @@ int rudp_open(int sockfd, struct sockaddr_in *dest_addr, socklen_t addrlen) {
         // Prepare ACK packet
         ack_packet.length = htons(0); // No data in ACK packet
         ack_packet.flags = FLAG_ACK;
-        ack_packet.seq_num = synack_packet.seq_num;
+        ack_packet.seq_num = synack_packet.seq_num; // the squence number of the expected 
 
         // Send ACK packet
         if (rudp_send(sockfd, &ack_packet, (const struct sockaddr_in *) dest_addr, addrlen) < 0) {
@@ -82,8 +82,7 @@ int rudp_accept(int sockfd, struct sockaddr_in *dest_addr, socklen_t addrlen) {
         // Prepare SYNACK packet
         synack_packet.length = htons(0); // No data in ACK packet
         synack_packet.flags = FLAG_ACK + FLAG_SYN;
-        synack_packet.seq_num = syn_packet.seq_num;
-
+        synack_packet.seq_num = syn_packet.seq_num+1;//incrementing the sequence number, the new sequence number is the sequence number of the expected packet
         // Send SYNACK packet
         if (rudp_send(sockfd, &synack_packet, (const struct sockaddr_in *) dest_addr, addrlen) < 0) {
             perror("sendto failed");
@@ -116,9 +115,9 @@ int rudp_accept(int sockfd, struct sockaddr_in *dest_addr, socklen_t addrlen) {
     return -1; // Handshake failed
 }
 
-void rudp_close(int sockfd, struct sockaddr_in *dest_addr, socklen_t *addrlen) {
+int rudp_close(int sockfd, struct sockaddr_in *dest_addr, socklen_t *addrlen) {
     RudpPacket fin_packet, ack_packet;
-
+    return 0;
 }
 
 unsigned short int calculate_checksum(void *data, unsigned int bytes) {

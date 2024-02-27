@@ -18,9 +18,13 @@
 #define FLAG_FIN 4
 
 
-struct _RudpPacket;
-typedef struct _RudpPacket RudpPacket;
-
+typedef struct _RudpPacket {
+    uint16_t length;
+    uint16_t checksum;
+    uint8_t flags;
+    int seq_num;
+    char data[MAXLINE];
+} RudpPacket;
 /*
  * Creating a RUDP socket and creating a handshake between two peers.
  */
@@ -39,7 +43,7 @@ ssize_t rudp_rcv(int socketfd, const RudpPacket *rudp_packet, struct sockaddr_in
 /*
  * Closes a connection between peers.
  */
-void rudp_close(int sockfd, struct sockaddr_in *dest_addr, socklen_t *addrlen) ;
+int rudp_close(int sockfd, struct sockaddr_in *dest_addr, socklen_t *addrlen) ;
 /*
 * @brief A checksum function that returns 16 bit checksum for data.
 * @param data The data to do the checksum for.
@@ -53,3 +57,7 @@ void rudp_close(int sockfd, struct sockaddr_in *dest_addr, socklen_t *addrlen) ;
 * You can also use this function as such without any change.
 */
 unsigned short int calculate_checksum(void *data, unsigned int bytes);
+/* accept a connection from a peer */
+int rudp_accept(int sockfd, struct sockaddr_in *dest_addr, socklen_t addrlen);
+/*open connection from sender*/
+int rudp_open(int sockfd, struct sockaddr_in *dest_addr, socklen_t addrlen);
