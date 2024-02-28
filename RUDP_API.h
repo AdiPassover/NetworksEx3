@@ -34,7 +34,7 @@ int rudp_socket();
  * Sending data to the peer. The function should wait for an
  * acknowledgment packet, and if it didn’t receive any, retransmits the data.
  */
-ssize_t rudp_send(int sockfd, const RudpPacket *rudp_packet,const struct sockaddr_in* servaddr, socklen_t addrlen);
+ssize_t rudp_send(int sockfd, const RudpPacket *rudp_packet, struct sockaddr_in *serv_addr, socklen_t addrlen);
 
 /*
  * Receive data from a peer.
@@ -43,19 +43,19 @@ ssize_t rudp_rcv(int socketfd, RudpPacket *rudp_packet, struct sockaddr_in *src_
 
 /*
  * Accept a connection from a peer
- * Returns 0 if success.
+ * Returns -1 if failure.
  */
 int rudp_accept(int sockfd, struct sockaddr_in *dest_addr, socklen_t addrlen);
 
 /*
  * Offer a handshake in order to establish a connection with a peer.
- * Returns 0 if success.
+ * Returns -1 if failure.
  */
 int rudp_connect(int sockfd, struct sockaddr_in *dest_addr, socklen_t addrlen);
 
 /*
  * Closes a connection from a peer
- * Returns 0 if success.
+ * Returns -1 if failure.
  */
 int rudp_close(int sockfd, struct sockaddr_in *dest_addr, socklen_t addrlen);
 

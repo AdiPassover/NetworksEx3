@@ -13,7 +13,6 @@
 
 int main(int argc, char *argv[]) {
     puts("Starting Receiver...\n");
-    u_int8_t seqnum = 0;
     if (argc != 3)
     {
         puts("invalid command");
@@ -36,7 +35,7 @@ int main(int argc, char *argv[]) {
     // Bind socket to port
     memset(&receiver_addr, 0, sizeof(receiver_addr));
     receiver_addr.sin_family = AF_INET;
-    receiver_addr.sin_addr.s_addr = INADDR_ANY;
+    receiver_addr.sin_addr.s_addr = inet_addr("127.0.0.1");;
     receiver_addr.sin_port = htons(port);
     if (bind(sockfd, (struct sockaddr *)&receiver_addr, sizeof(receiver_addr)) < 0)
     {
@@ -47,11 +46,12 @@ int main(int argc, char *argv[]) {
 
     puts("Waiting for RUDP connection...");
 
-    // Wait for handshake
     struct sockaddr_in sender_addr;
     socklen_t sender_addr_len = sizeof(sender_addr);
     memset(&sender_addr, 0, sender_addr_len);
-    seqnum = rudp_accept(sockfd, &sender_addr, sizeof(sender_addr));;
+    // Wait for handshake
+    int seqnum = rudp_accept(sockfd, &sender_addr, sizeof(sender_addr));
+    printf("seqnum: %d\n",seqnum);
     if (seqnum < 0) {
         perror("connection failed");
         close(sockfd);

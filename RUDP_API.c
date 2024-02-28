@@ -5,8 +5,8 @@ int rudp_socket() {
     return socket(AF_INET, SOCK_DGRAM, 0);
 }
 
-ssize_t rudp_send(int sockfd, const RudpPacket *rudp_packet,const struct sockaddr_in* servaddr, socklen_t addrlen){
-    return sendto(sockfd, (const char *)rudp_packet, sizeof(RudpPacket) + rudp_packet->length, 0,(const struct sockaddr *) servaddr, addrlen);
+ssize_t rudp_send(int sockfd, const RudpPacket *rudp_packet, struct sockaddr_in *serv_addr, socklen_t addrlen) {
+    return sendto(sockfd, (const char *)rudp_packet, sizeof(RudpPacket) + rudp_packet->length, 0, (struct sockaddr *) serv_addr, addrlen);
 }
 
 ssize_t rudp_rcv(int socketfd, RudpPacket *rudp_packet, struct sockaddr_in *src_addr, socklen_t *addrlen) {
@@ -15,7 +15,7 @@ ssize_t rudp_rcv(int socketfd, RudpPacket *rudp_packet, struct sockaddr_in *src_
 
 int rudp_connect(int sockfd, struct sockaddr_in *dest_addr, socklen_t addrlen) {
     RudpPacket syn_packet, synack_packet, ack_packet;
-    socklen_t* len = NULL;
+    socklen_t* len = &addrlen;
 
     // Prepare SYN packet
     syn_packet.length = htons(0); // No data in SYN packet
@@ -23,7 +23,7 @@ int rudp_connect(int sockfd, struct sockaddr_in *dest_addr, socklen_t addrlen) {
     syn_packet.seq_num = 0;
 
     // Send SYN packet TODO: add a timer
-    if (rudp_send(sockfd, &syn_packet, (const struct sockaddr_in *) dest_addr, addrlen) < 0) {
+    if (rudp_send(sockfd, &syn_packet, dest_addr, addrlen) < 0) {
         perror("sendto failed");
         return -1;
     }
@@ -46,7 +46,7 @@ int rudp_connect(int sockfd, struct sockaddr_in *dest_addr, socklen_t addrlen) {
         ack_packet.seq_num = synack_packet.seq_num; // the squence number of the expected 
 
         // Send ACK packet
-        if (rudp_send(sockfd, &ack_packet, (const struct sockaddr_in *) dest_addr, addrlen) < 0) {
+        if (rudp_send(sockfd, &ack_packet, dest_addr, addrlen) < 0) {
             perror("sendto failed");
             return -1;
         }
@@ -62,7 +62,7 @@ int rudp_connect(int sockfd, struct sockaddr_in *dest_addr, socklen_t addrlen) {
 
 int rudp_accept(int sockfd, struct sockaddr_in *dest_addr, socklen_t addrlen) {
     RudpPacket syn_packet, synack_packet, ack_packet;
-    socklen_t* len = NULL;
+    socklen_t* len = &addrlen;
 
     // Receive SYN packet
     if (rudp_rcv(sockfd, &syn_packet, dest_addr, len) < 0) {
@@ -77,7 +77,7 @@ int rudp_accept(int sockfd, struct sockaddr_in *dest_addr, socklen_t addrlen) {
         synack_packet.flags = FLAG_ACK + FLAG_SYN;
         synack_packet.seq_num = syn_packet.seq_num+1;//incrementing the sequence number, the new sequence number is the sequence number of the expected packet
         // Send SYNACK packet
-        if (rudp_send(sockfd, &synack_packet, (const struct sockaddr_in *) dest_addr, addrlen) < 0) {
+        if (rudp_send(sockfd, &synack_packet, dest_addr, addrlen) < 0) {
             perror("sendto failed");
             return -1;
         }
@@ -119,7 +119,7 @@ int rudp_close(int sockfd, struct sockaddr_in *dest_addr, socklen_t addrlen) {
     fin_packet.seq_num = 0;
 
     // Send FIN packet
-    if (rudp_send(sockfd, &fin_packet, (const struct sockaddr_in *) dest_addr, addrlen) < 0) {
+    if (rudp_send(sockfd, &fin_packet, dest_addr, addrlen) < 0) {
         perror("sendto failed");
         return -1;
     }

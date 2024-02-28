@@ -72,7 +72,7 @@ int main(int argc, char *argv[]) {
     free(algo);
 
 
-    if (inet_pton(AF_INET, SERVER_IP, &senderAdress.sin_addr) <= 0) { // converting the IP address
+    if (inet_pton(AF_INET, SERVER_IP, &senderAdress.sin_addr) <= 0) { // setting the IP address
         perror("inet_pton(3)");
         close(socketfd);
         free(SERVER_IP);

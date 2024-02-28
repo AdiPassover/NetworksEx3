@@ -33,14 +33,14 @@ char *util_generate_random_data(unsigned int size) {
 }
 int main(int argc, char *argv[]) {
     puts("Starting Sender...\n");
-    int seqnum = 0;
+
     if (argc != 5)
     {
         puts("invalid command");
         return 1;
     }
     int port = 0;
-    char IP[20] = {0};
+    char SERVER_IP[20] = {0};
     for (int i = 1; i < argc; i++)
     {
         if (strcmp(argv[i], "-p") == 0)
@@ -49,15 +49,12 @@ int main(int argc, char *argv[]) {
         }
         else if (strcmp(argv[i], "-ip") == 0)
         {
-            strcpy(IP, argv[i + 1]);
+            strcpy(SERVER_IP, argv[i + 1]);
         }
     }
 
-    int sockfd;
-    struct sockaddr_in receiver_addr;
-
     // Create socket
-    sockfd = rudp_socket();
+    int sockfd = rudp_socket();
     if (sockfd < 0)
     {
         perror("Socket creation error");
@@ -65,22 +62,30 @@ int main(int argc, char *argv[]) {
     }
 
     // Set up receiver address
+    struct sockaddr_in receiver_addr;
     memset(&receiver_addr, 0, sizeof(receiver_addr));
     receiver_addr.sin_family = AF_INET;
     receiver_addr.sin_port = htons(port);
-    receiver_addr.sin_addr.s_addr = INADDR_ANY;
+
+    if (inet_pton(AF_INET, SERVER_IP, &receiver_addr.sin_addr) <= 0) { // setting the SERVER_IP address
+        perror("inet_pton(3)");
+        close(sockfd);
+        return 1;
+    }
 
     char* file = util_generate_random_data(FILE_SIZE);
-    
 
-    //bind socket to port
-//    if (bind(sockfd, (struct sockaddr *)&receiver_addr, sizeof(receiver_addr)) < 0)
-//    {
-//        perror("Bind failed");
-//        exit(EXIT_FAILURE);
+//    struct timeval tv = {5,0};
+//    if (setsockopt(sockfd,SOL_SOCKET,SO_RCVTIMEO,(char*)&tv,sizeof(tv)) == -1) { // checking the server is online
+//        puts("server is offline");
+//        perror("setsockopt(2)");
+//        close(sockfd);
+//        return 1;
 //    }
+//    puts("server is online");
+
     // Perform handshake
-    seqnum = rudp_connect(sockfd, &receiver_addr, sizeof(receiver_addr));
+    int seqnum = rudp_connect(sockfd, &receiver_addr, sizeof(receiver_addr));
     if (seqnum < 0) {
         perror("connection failed");
         return -1;
@@ -93,7 +98,7 @@ int main(int argc, char *argv[]) {
     packet->checksum = 1024;
     packet->length = 1024;
     u_int8_t acked = 0;
-    socklen_t *len = NULL; // saving the length we don't cate about
+    socklen_t len = sizeof(receiver_addr); // saving the length we don't cate about
     for(int i = 0; i < FILE_SIZE; i+=1024){
         memcpy(packet->data, file+i, 1024);
         if(rudp_send(sockfd, (const RudpPacket *) &packet, &receiver_addr, sizeof(receiver_addr)) == -1){
@@ -103,7 +108,7 @@ int main(int argc, char *argv[]) {
         }
         printf("Sent packet %d\n", i/1024);
         while (!acked) {
-            int bytes_received = rudp_rcv(sockfd, packet, &receiver_addr, len);
+            int bytes_received = rudp_rcv(sockfd, packet, &receiver_addr, &len);
             if (bytes_received < 0) {
                 perror("recvfrom failed");
                 free(packet);
