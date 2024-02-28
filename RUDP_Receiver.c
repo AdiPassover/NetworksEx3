@@ -57,39 +57,50 @@ int main(int argc, char *argv[]) {
         close(sockfd);
         return -1;
     }
-    RudpPacket *packet = (RudpPacket *)malloc(sizeof(RudpPacket));
-    packet->seq_num = seqnum;
-    packet->flags = 0;
-    packet->checksum = 1024;
-    packet->length = 1024;
-    //u_int8_t acked = 0;
-    socklen_t *len = NULL; // saving the length we don't cate about
-    for(int i = 0; i < FILE_SIZE; i+=1024){
-        if(i+1024 > FILE_SIZE){
-            packet->length = FILE_SIZE - i;
+
+    RudpPacket packet;
+    while (1) {
+        ssize_t bytes_recv = rudp_rcv(sockfd, &packet, &sender_addr, &sender_addr_len);
+        if (bytes_recv < 0) {
+            perror("recvfrom(2)");
+            close(sockfd);
+            return 1;
         }
-        rudp_rcv(sockfd, packet, &sender_addr, len);
-        if (packet->seq_num != seqnum || calculate_checksum(packet->data, packet->length) != packet->checksum) //if the packet is not the expected one or the checksum is not correct, ask for retransmission
-        { 
-           rudp_send(sockfd, packet, &sender_addr, sizeof(sender_addr));
+        if ((packet.flags & FLAG_FIN)) {
+            printf("Received FIN packet %d.\n",packet.seq_num);
+            break;
+        }
+        printf("Received packet %d\n",packet.seq_num);
+        packet.flags = FLAG_ACK;
+        //if the packet is not the expected one or the checksum is not correct, ask for retransmission
+        if (packet.seq_num != seqnum || calculate_checksum(packet.data, packet.length) != packet.checksum) {
+            packet.seq_num = seqnum;
+            printf("Packet had error. Sending ACK %d\n",packet.seq_num);
+            rudp_send(sockfd, &packet, &sender_addr, sizeof(sender_addr));
         }
         else //if the packet is the expected one and the checksum is correct, send an ack, and update the sequence number for the next packet
         {
             //acked = 1;
-            packet->flags = FLAG_ACK;
-            packet->seq_num = ++seqnum;
-            rudp_send(sockfd, packet, &sender_addr, sizeof(sender_addr));
+            packet.seq_num = ++seqnum;
+            printf("Packet is good. Sending ACK %d\n",packet.seq_num);
+            rudp_send(sockfd, &packet, &sender_addr, sizeof(sender_addr));
         }
     }
-    //finish recieveing, and send the last ack, close the rudp connection
-    //packet->flags = FLAG_FIN;
-    if(rudp_close(sockfd, &receiver_addr, sizeof(receiver_addr))==-1){
+    RudpPacket ack_packet;
+    ack_packet.flags = FLAG_ACK;
+    ack_packet.seq_num = 777;
+    rudp_send(sockfd, &ack_packet, &sender_addr, sizeof(sender_addr));
+    puts("Sent ACK for FIN");
+    printf("ack_packet flag: %d\n",ack_packet.flags);
+    //usleep(1000000);
+    if (rudp_close(sockfd, &sender_addr, sizeof(sender_addr))==-1) {
         perror("close failed");
-        free(packet);
+        //free(packet);
         return -1;
     }
-    free(packet);
+    //free(packet);
 
-    
+    puts("Receiver finished successfully");
+    close(sockfd);
     return 0;
 }

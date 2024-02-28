@@ -82,8 +82,6 @@ int rudp_accept(int sockfd, struct sockaddr_in *dest_addr, socklen_t addrlen) {
             return -1;
         }
 
-        //printf("Sent SYNACK packet\n");
-
     } else {
         printf("Invalid SYN packet\n");
         return -1; // Handshake failed
@@ -110,8 +108,7 @@ int rudp_accept(int sockfd, struct sockaddr_in *dest_addr, socklen_t addrlen) {
 
 int rudp_close(int sockfd, struct sockaddr_in *dest_addr, socklen_t addrlen) {
     RudpPacket fin_packet, ack_packet;
-
-    socklen_t* len = NULL;
+    socklen_t* len = &addrlen;
 
     // Prepare FIN packet
     fin_packet.length = htons(0); // No data in SYN packet
@@ -124,7 +121,7 @@ int rudp_close(int sockfd, struct sockaddr_in *dest_addr, socklen_t addrlen) {
         return -1;
     }
 
-    printf("Sent FIN packet\n");
+    printf("Sent FIN packet, waiting for ACK.\n");
 
     // Receive ACK packet
     if (rudp_rcv(sockfd, &ack_packet, dest_addr, len) < 0) {
@@ -132,15 +129,15 @@ int rudp_close(int sockfd, struct sockaddr_in *dest_addr, socklen_t addrlen) {
         return -1;
     }
 
-    printf("Received ACK packet\n");
+    printf("Received ACK packet for FIN\n");
 
     // Check if it's a valid ACK packet
     if (ack_packet.flags & FLAG_ACK) {
-        //printf("Closing closed successfully\n");
-        close(sockfd);
+        //printf("ACK seqnum: %d\n",ack_packet.seq_num);
+        //close(sockfd);
         return 0; // Closing successful
     }
-    //printf("Closing failed\n");
+    printf("ack_packet isn't flagged ACK. Seqnum: %d. Flag: %d.\n",ack_packet.seq_num,ack_packet.flags);
     return -1; // Closing failed
 }
 

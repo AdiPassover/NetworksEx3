@@ -72,7 +72,7 @@ int main(int argc, char *argv[]) {
     free(algo);
 
 
-    if (inet_pton(AF_INET, SERVER_IP, &senderAdress.sin_addr) <= 0) { // setting the IP address
+    if (inet_pton(AF_INET, SERVER_IP, &senderAdress.sin_addr) <= 0) { // setting up the IP address
         perror("inet_pton(3)");
         close(socketfd);
         free(SERVER_IP);
@@ -95,8 +95,8 @@ int main(int argc, char *argv[]) {
         return 1;
     }
     puts("file sent");
-    int input = -1;
 
+    int input = -1;
     while (input) {
 
         puts("Press 1 to resend the file, press 0 to exit.");

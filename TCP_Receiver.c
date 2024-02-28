@@ -47,15 +47,12 @@ int main(int argc, char* argv[]) {
     socketfd = socket(AF_INET, SOCK_STREAM, 0);
     if (socketfd == -1) {
         perror("socket(2)");
-        //free(algo);
         exit(1);
     }
     if (setsockopt(socketfd, IPPROTO_TCP, TCP_CONGESTION, algo, strlen(algo)) != 0) {
         perror("setsockopt(2)");
-        //free(algo);
         exit(1);
     }
-    //free(algo);
 
     if (bind(socketfd, (struct sockaddr *) &receiverAddress, sizeof(receiverAddress)) == -1) {
         perror("bind(2)");
@@ -67,15 +64,13 @@ int main(int argc, char* argv[]) {
         close(socketfd);
         return 1;
     }
-    socklen_t clientAddressLen = sizeof(senderAddress);
 
+    socklen_t clientAddressLen = sizeof(senderAddress);
     double times[MAX_RUNS];
     double speeds[MAX_RUNS];
     int currentRun = 1;
 
     puts("Waiting for TCP connection...");
-
-
     while (1) {
 
         int client_sock = accept(socketfd, (struct sockaddr *) &senderAddress, &clientAddressLen);
