@@ -11,11 +11,18 @@
 #include <arpa/inet.h>
 
 
-#define FILE_SIZE 2000000
+#define FILE_SIZE 3000000
 #define MAX_RUNS 100
 
 
-void printStats(double times[100], double speeds[100], int run);
+void printStats(double times[100], double speeds[100], int run, char* algo);
+long recreateNumber(char *array, int offset) {
+    long number = 0;
+    for (int i = 0; i < 32; i++) {
+        number |= (array[i+offset] & 1) << (31 - i);
+    }
+    return number;
+}
 
 int main(int argc, char* argv[]) {
     puts("Starting Receiver...\n");
@@ -84,15 +91,18 @@ int main(int argc, char* argv[]) {
         int totalRecv = 0;
         int first = 1;
         while (currentRun < MAX_RUNS) {
+            int bytes_received = recv(client_sock, buffer, FILE_SIZE, 0);
+            gettimeofday(&end, NULL);
             if (first) {
-                gettimeofday(&start, NULL);
+                start.tv_sec = recreateNumber(buffer,0);
+                start.tv_usec = recreateNumber(buffer,32);
                 first = 0;
             }
-            int bytes_received = recv(client_sock, buffer, FILE_SIZE, 0);
+            //printf("bytes: %d\n",bytes_received);
             totalRecv += bytes_received;
             if (buffer[0]=='e'&&buffer[1]=='x'&&buffer[2]=='i'&&buffer[3]=='t' && bytes_received < 10) {
                 puts("Sender sent exit message.\n");
-                printStats(times, speeds, currentRun);
+                printStats(times, speeds, currentRun,algo);
                 close(client_sock);
                 close(socketfd);
                 exit(1);
@@ -102,7 +112,6 @@ int main(int argc, char* argv[]) {
             }
             totalRecv = 0;
             first = 1;
-            gettimeofday(&end, NULL);
             puts("File transfer completed.\n");
 
             if (bytes_received < 0) {
@@ -123,29 +132,28 @@ int main(int argc, char* argv[]) {
     return 0;
 }
 
-void printStats(double times[100], double speeds[100], int run) {
+void printStats(double times[100], double speeds[100], int run, char* algo) {
     double timeSum = 0;
-    double sum1 = 0;
+    double speedSum = 0;
     double avgTime = 0;
     double avgSpeed = 0;
-    puts("--------------------------------------------\n");
-    puts("(*) Times summary:\n\n");
+    puts("--------------------------------------------");
+    puts("(*) Times and speeds summary:\n");
     for (int i = 1; i < run; i++) {
         timeSum += times[i];
-        printf("(*) Run %d, Time: %0.3lf ms\n", i, times[i]);
-    }
-    printf("\n(*) Speeds summary:\n\n");
-    for (int i = 1; i < run; i++) {
-        sum1 += speeds[i];
-        printf("(*) Run %d, Speed: %0.3lf MB/s\n", i, speeds[i]);
+        speedSum += speeds[i];
+        printf("(*) Run %d, Time: %0.3lf ms, Speed: %0.3lf MB/s\n", i, times[i], speeds[i]);
     }
     if (run > 0) {
         avgTime = (timeSum / (double) (run-1));
-        avgSpeed = (sum1 / (double) (run-1));
+        avgSpeed = (speedSum / (double) (run-1));
     }
-    printf("\n(*) Time avarages:\n");
-    printf("(*) Avarage transfer time for whole file: %0.3lf ms\n", avgTime);
-    printf("(*) Avarage bandwidth: %0.3lf MB/s\n", avgSpeed);
+    printf("\n(*) Overall statistics:\n");
+    printf("(*) CC Algorithm: %s\n", algo);
+    printf("(*) Number of runs: %d\n", run-1);
+    printf("(*) Average RTT: %0.3lf ms\n", avgTime);
+    printf("(*) Average throughput: %0.3lf MB/s\n", avgSpeed);
+    printf("(*) Total time: %0.3lf MB/s\n", timeSum);
     printf("--------------------------------------------\n");
 
 }

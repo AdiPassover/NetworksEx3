@@ -113,7 +113,7 @@ int rudp_close(int sockfd, struct sockaddr_in *dest_addr, socklen_t addrlen) {
     // Prepare FIN packet
     fin_packet.length = htons(0); // No data in SYN packet
     fin_packet.flags = FLAG_FIN;
-    fin_packet.seq_num = 0;
+    fin_packet.seq_num = ((unsigned int)rand()%256);
 
     // Send FIN packet
     if (rudp_send(sockfd, &fin_packet, dest_addr, addrlen) < 0) {
@@ -121,7 +121,7 @@ int rudp_close(int sockfd, struct sockaddr_in *dest_addr, socklen_t addrlen) {
         return -1;
     }
 
-    printf("Sent FIN packet, waiting for ACK.\n");
+    printf("Sent FIN %d packet, waiting for ACK.\n",fin_packet.seq_num);
 
     // Receive ACK packet
     if (rudp_rcv(sockfd, &ack_packet, dest_addr, len) < 0) {

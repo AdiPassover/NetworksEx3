@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <time.h>
+#include <sys/time.h>
 #include <string.h>
 #include <netinet/in.h>
 #include <netinet/tcp.h>
@@ -8,7 +9,7 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
-#define FILE_SIZE 2000000
+#define FILE_SIZE 3000000
 
 /*
 * @brief A random data generator function based on srand() and rand().
@@ -29,6 +30,12 @@ char *util_generate_random_data(unsigned int size) {
     for (unsigned int i = 0; i < size; i++)
         *(buffer + i) = ((unsigned int) rand() % 256);
     return buffer;
+}
+
+void setBits(char *array, long number, int offset) {
+    for (int i = 0; i < 32; i++) {
+        array[i+offset] = (number >> (31 - i)) & 1;
+    }
 }
 
 int main(int argc, char *argv[]) {
@@ -85,9 +92,16 @@ int main(int argc, char *argv[]) {
         free(SERVER_IP);
         return 1;
     }
-    puts("sending file");
 
+    // adding start to file
+    struct timeval start, end;
+    gettimeofday(&start, NULL);
+    setBits(file, start.tv_sec, 0);
+    setBits(file, start.tv_usec, 32);
+
+    puts("sending file");
     long bytes_sent = send(socketfd, file, FILE_SIZE, 0);
+    gettimeofday(&end,NULL);
     if (bytes_sent <= 0) {
         perror("send(2)");
         close(socketfd);
@@ -95,6 +109,9 @@ int main(int argc, char *argv[]) {
         return 1;
     }
     puts("file sent");
+    double timeTaken = (end.tv_sec - start.tv_sec) * 1000.0;
+    timeTaken += (end.tv_usec - start.tv_usec) / 1000.0;
+    printf("time taken: %0.3lf ms\n",timeTaken);
 
     int input = -1;
     while (input) {
@@ -102,6 +119,10 @@ int main(int argc, char *argv[]) {
         puts("Press 1 to resend the file, press 0 to exit.");
         scanf("%d", &input);
         if (input == 1) {
+            gettimeofday(&start, NULL);
+            setBits(file, start.tv_sec, 0);
+            setBits(file, start.tv_usec, 32);
+
             bytes_sent = send(socketfd, file, FILE_SIZE, 0);
             if (bytes_sent <= 0) {
                 perror("send(2)");
@@ -109,6 +130,10 @@ int main(int argc, char *argv[]) {
                 free(SERVER_IP);
                 return 1;
             }
+            gettimeofday(&end, NULL);
+            timeTaken = (end.tv_sec - start.tv_sec) * 1000.0;
+            timeTaken += (end.tv_usec - start.tv_usec) / 1000.0;
+            printf("time taken: %0.3lf ms\n",timeTaken);
         }
         else if (input != 0) {
             puts("Invalid input.");
@@ -125,6 +150,7 @@ int main(int argc, char *argv[]) {
     }
     close(socketfd);
     free(SERVER_IP);
+    free(file);
     return 0;
 }
 

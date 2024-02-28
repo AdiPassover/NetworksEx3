@@ -91,7 +91,6 @@ int main(int argc, char *argv[]) {
     ack_packet.seq_num = 777;
     rudp_send(sockfd, &ack_packet, &sender_addr, sizeof(sender_addr));
     puts("Sent ACK for FIN");
-    printf("ack_packet flag: %d\n",ack_packet.flags);
     //usleep(1000000);
     if (rudp_close(sockfd, &sender_addr, sizeof(sender_addr))==-1) {
         perror("close failed");
