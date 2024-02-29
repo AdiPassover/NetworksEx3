@@ -12,10 +12,12 @@
 #include <stdio.h>
 #include <sys/socket.h>
 
-#define MAXLINE 1024
+#define MAXLINE 2048
 #define FLAG_ACK 1
 #define FLAG_SYN 2
 #define FLAG_FIN 4
+
+#define TIMEOUT 5000 // microseconds
 
 
 typedef struct _RudpPacket {
@@ -31,15 +33,27 @@ typedef struct _RudpPacket {
 int rudp_socket();
 
 /*
- * Sending data to the peer. The function should wait for an
- * acknowledgment packet, and if it didn’t receive any, retransmits the data.
+ * Sending data to the peer. Return the bits sent.
  */
 ssize_t rudp_send(int sockfd, const RudpPacket *rudp_packet, struct sockaddr_in *serv_addr, socklen_t addrlen);
+
+/*
+ * Sending data to the peer. The function should wait for an acknowledgment packet,
+ * and if it didn’t receive any in timeout microseconds, retransmits the data.
+ * Return the bits sent.
+ */
+ssize_t rudp_send_with_timer(int sockfd, const RudpPacket *rudp_packet, struct sockaddr_in *serv_addr, socklen_t addrlen, int timeout);
 
 /*
  * Receive data from a peer.
  */
 ssize_t rudp_rcv(int socketfd, RudpPacket *rudp_packet, struct sockaddr_in *src_addr, socklen_t *addrlen);
+
+/*
+ * Receive data from a peer.
+ * If no data received in timeout microseconds returns 0.
+ */
+int rudp_rcv_with_timer(int sockfd, RudpPacket *rudp_packet, struct sockaddr_in *src_addr, socklen_t *addrlen, int timeout);
 
 /*
  * Accept a connection from a peer

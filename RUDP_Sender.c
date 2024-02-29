@@ -63,6 +63,7 @@ int main(int argc, char *argv[]) {
 
     // Set up receiver address
     struct sockaddr_in receiver_addr;
+    socklen_t rec_len = sizeof(receiver_addr);
     memset(&receiver_addr, 0, sizeof(receiver_addr));
     receiver_addr.sin_family = AF_INET;
     receiver_addr.sin_port = htons(port);
@@ -90,36 +91,36 @@ int main(int argc, char *argv[]) {
         perror("connection failed");
         return -1;
     }
+    // wait a little to ensure no retransmission of SYNACK
+    RudpPacket synack_packet;
+    while (rudp_rcv_with_timer(sockfd,&synack_packet,&receiver_addr, &rec_len,TIMEOUT*2)) {
+        RudpPacket reack_packet;
+        reack_packet.length = htons(0); // No data in ACK packet
+        reack_packet.flags = FLAG_ACK;
+        reack_packet.seq_num = synack_packet.seq_num; // the squence number of the expected
+
+        // Send ACK packet
+        if (rudp_send(sockfd, &reack_packet, &receiver_addr, sizeof(receiver_addr)) < 0) {
+            perror("sendto failed");
+            return -1;
+        }
+    }
     puts("Connected successfully");
     // Send data 
     RudpPacket packet;
     packet.seq_num = seqnum;
-    for(int i = 0; i < FILE_SIZE; i+=1024){
-        memcpy(packet.data, file+i, 1024);
-        packet.length = htons(1024);
+    for(int i = 0; i < FILE_SIZE; i+=MAXLINE){
+        memcpy(packet.data, file+i, MAXLINE);
+        packet.length = htons(MAXLINE);
         packet.flags = 0;
         packet.checksum = calculate_checksum(packet.data, packet.length);
-        if(rudp_send(sockfd, &packet, &receiver_addr, sizeof(receiver_addr)) == -1){
+        printf("Sending packet %d\n",packet.seq_num);
+        if (rudp_send_with_timer(sockfd, &packet, &receiver_addr, sizeof(receiver_addr),TIMEOUT) < 0){
             perror("sendto failed");
             //free(packet);
             return -1;
         }
-        printf("Sent packet %d\n", packet.seq_num);
-        u_int8_t acked = 0;
-        while (!acked) {
-            RudpPacket ack_packet;
-            socklen_t len = sizeof(receiver_addr);
-            ssize_t bytes_received = rudp_rcv(sockfd, &ack_packet, &receiver_addr, &len);
-            if (bytes_received < 0) {
-                perror("recvfrom failed");
-                //free(packet);
-                return -1;
-            }
-            if ((ack_packet.flags & FLAG_ACK) && (ack_packet.seq_num == ++seqnum)) {
-                acked = 1;
-                printf("Received ACK for packet %d\n", ack_packet.seq_num);
-            }
-        }
+        //printf("Sent packet %d\n", packet.seq_num);
         packet.seq_num++;
     }
     puts("Finished sending data. Closing connection");
@@ -143,13 +144,30 @@ int main(int argc, char *argv[]) {
         return -1;
     }
 
+    printf("Received FIN %d\n",last_packet.seq_num);
     // ACK the FIN
-    RudpPacket last_ack_packet;
-    last_ack_packet.flags = FLAG_ACK;
-    if (rudp_send(sockfd, &last_ack_packet, &receiver_addr, sizeof(receiver_addr)) < 0) {
+    last_packet.flags = FLAG_ACK;
+    if (rudp_send(sockfd, &last_packet, &receiver_addr, sizeof(receiver_addr)) < 0) {
         perror("sendto failed");
         //free(packet);
         return -1;
+    }
+
+    // wait a little to ensure no FIN retransmission
+    while (rudp_rcv_with_timer(sockfd,&last_packet,&receiver_addr,&len,TIMEOUT*2)) {
+        if (!(last_packet.flags & FLAG_FIN)) {
+            perror("last packet received needs to be FIN");
+            return -1;
+        }
+
+        printf("Received FIN %d\n",last_packet.seq_num);
+        // ACK the FIN
+        last_packet.flags = FLAG_ACK;
+        if (rudp_send(sockfd, &last_packet, &receiver_addr, sizeof(receiver_addr)) < 0) {
+            perror("sendto failed");
+            //free(packet);
+            return -1;
+        }
     }
 
     puts("Sender finished successfully");

@@ -9,59 +9,176 @@ ssize_t rudp_send(int sockfd, const RudpPacket *rudp_packet, struct sockaddr_in 
     return sendto(sockfd, (const char *)rudp_packet, sizeof(RudpPacket) + rudp_packet->length, 0, (struct sockaddr *) serv_addr, addrlen);
 }
 
+ssize_t rudp_send_with_timer(int sockfd, const RudpPacket *rudp_packet, struct sockaddr_in *serv_addr, socklen_t addrlen, int timeout) {
+    ssize_t bytes_sent;
+    struct timeval tv;
+    fd_set readfds;
+
+    // Set timeout for socket
+    tv.tv_sec = timeout / 1000000;
+    tv.tv_usec = timeout % 1000000;
+    setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, (const char*)&tv, sizeof(tv));
+
+    // Send the packet
+    bytes_sent = rudp_send(sockfd,rudp_packet,serv_addr,addrlen);
+    if (bytes_sent < 0) {
+        perror("sendto failed");
+        return -1;
+    }
+
+    // Wait for ACK with the same seqnum
+    while (1) {
+        FD_ZERO(&readfds);
+        FD_SET(sockfd, &readfds);
+
+        int ready = select(sockfd + 1, &readfds, NULL, NULL, &tv);
+        if (ready < 0) {
+            perror("select failed");
+            return -1;
+        } else if (ready == 0) { // Timeout reached, resend the packet and reset the timer
+            bytes_sent = rudp_send(sockfd,rudp_packet,serv_addr,addrlen);
+            if (bytes_sent < 0) {
+                perror("sendto failed");
+                return -1;
+            }
+            // Reset the timer
+            tv.tv_sec = timeout / 1000000;
+            tv.tv_usec = timeout % 1000000;
+            printf("Timeout for packet %d\n",rudp_packet->seq_num);
+            continue; // Continue waiting for ACK
+        } else {
+            // Socket is ready to read, check for ACK
+            RudpPacket ack_packet;
+            ssize_t bytes_received = rudp_rcv(sockfd,&ack_packet,serv_addr,&addrlen);
+            if (bytes_received < 0) {
+                perror("recvfrom failed");
+                return -1;
+            }
+            // Check if received packet is an ACK with the same seqnum
+            if ((ack_packet.flags & FLAG_ACK) && ack_packet.seq_num == rudp_packet->seq_num) {
+                // ACK received, return
+                printf("Received ACK %d\n",ack_packet.seq_num);
+                return bytes_received;
+            }
+            // If not an ACK with the same seqnum, continue waiting
+        }
+    }
+}
+
 ssize_t rudp_rcv(int socketfd, RudpPacket *rudp_packet, struct sockaddr_in *src_addr, socklen_t *addrlen) {
     return recvfrom(socketfd, rudp_packet, sizeof(RudpPacket) + rudp_packet->length, 0, (struct sockaddr *) src_addr, addrlen);
 }
 
+int rudp_rcv_with_timer(int sockfd, RudpPacket *rudp_packet, struct sockaddr_in *src_addr, socklen_t *addrlen, int timeout) {
+    struct timeval tv;
+    fd_set readfds;
+
+    // Set timeout for socket
+    tv.tv_sec = timeout / 1000000;
+    tv.tv_usec = timeout % 1000000;
+
+    // Initialize read file descriptor set
+    FD_ZERO(&readfds);
+    FD_SET(sockfd, &readfds);
+
+    // Wait for data to be available on the socket or timeout
+    int ready = select(sockfd + 1, &readfds, NULL, NULL, &tv);
+    if (ready < 0) {
+        perror("select failed");
+        return -1;
+    } else if (ready == 0) {
+        // Timeout reached, no data available
+        return 0;
+    } else {
+        // Data available, receive the packet
+        ssize_t bytes_received = rudp_rcv(sockfd,rudp_packet,src_addr,addrlen);
+        if (bytes_received < 0) {
+            perror("recvfrom failed");
+            return -1;
+        }
+        return bytes_received;
+    }
+}
+
 int rudp_connect(int sockfd, struct sockaddr_in *dest_addr, socklen_t addrlen) {
     RudpPacket syn_packet, synack_packet, ack_packet;
-    socklen_t* len = &addrlen;
+    //socklen_t* len = &addrlen;
+    ssize_t bytes_sent;
+    struct timeval tv;
+    fd_set readfds;
+
+    // Set timeout for socket
+    tv.tv_sec = TIMEOUT / 1000000;
+    tv.tv_usec = TIMEOUT % 1000000;
+    setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, (const char*)&tv, sizeof(tv));
 
     // Prepare SYN packet
     syn_packet.length = htons(0); // No data in SYN packet
     syn_packet.flags = FLAG_SYN;
     syn_packet.seq_num = 0;
 
-    // Send SYN packet TODO: add a timer
-    if (rudp_send(sockfd, &syn_packet, dest_addr, addrlen) < 0) {
+    // Send the packet
+    bytes_sent = rudp_send(sockfd,&syn_packet,dest_addr,addrlen);
+    if (bytes_sent < 0) {
+        perror("sendto failed");
+        return -1;
+    }
+    printf("Sent SYN %d\n",syn_packet.seq_num);
+
+    // Wait for ACK with the same seqnum
+    while (1) {
+        FD_ZERO(&readfds);
+        FD_SET(sockfd, &readfds);
+
+        int ready = select(sockfd + 1, &readfds, NULL, NULL, &tv);
+        if (ready < 0) {
+            perror("select failed");
+            return -1;
+        } else if (ready == 0) { // Timeout reached, resend the packet and reset the timer
+            bytes_sent = rudp_send(sockfd,&syn_packet,dest_addr,addrlen);
+            if (bytes_sent < 0) {
+                perror("sendto failed");
+                return -1;
+            }
+            // Reset the timer
+            tv.tv_sec = TIMEOUT / 1000000;
+            tv.tv_usec = TIMEOUT % 1000000;
+            printf("Timeout for SYN %d\n",syn_packet.seq_num);
+            continue; // Continue waiting for ACK
+        } else {
+            // Socket is ready to read, check for ACK
+            ssize_t bytes_received = rudp_rcv(sockfd,&synack_packet,dest_addr,&addrlen);
+            if (bytes_received < 0) {
+                perror("recvfrom failed");
+                return -1;
+            }
+            // Check if received packet is an ACK with the same seqnum
+            if ((synack_packet.flags & FLAG_SYN) && (synack_packet.flags & FLAG_ACK) && synack_packet.seq_num == syn_packet.seq_num) {
+                // ACK received, return
+                printf("Received SYNACK %d\n",synack_packet.seq_num);
+                break;
+            }
+            // If not an ACK with the same seqnum, continue waiting
+        }
+    }
+
+    ack_packet.length = htons(0); // No data in ACK packet
+    ack_packet.flags = FLAG_ACK;
+    ack_packet.seq_num = synack_packet.seq_num; // the squence number of the expected
+
+    // Send ACK packet
+    if (rudp_send(sockfd, &ack_packet, dest_addr, addrlen) < 0) {
         perror("sendto failed");
         return -1;
     }
 
-    printf("Sent SYN packet\n");
+    printf("Sent ACK packet %d\n",ack_packet.seq_num);
 
-    // Receive SYNACK packet
-    if (rudp_rcv(sockfd, &synack_packet, dest_addr, len) < 0) {
-        perror("recvfrom failed");
-        return -1;
-    }
-
-    printf("Received SYNACK packet\n");
-
-    // Check if it's a valid SYNACK packet
-    if ((synack_packet.flags & FLAG_SYN) && (synack_packet.flags & FLAG_ACK)) {
-        // Prepare ACK packet
-        ack_packet.length = htons(0); // No data in ACK packet
-        ack_packet.flags = FLAG_ACK;
-        ack_packet.seq_num = synack_packet.seq_num; // the squence number of the expected 
-
-        // Send ACK packet
-        if (rudp_send(sockfd, &ack_packet, dest_addr, addrlen) < 0) {
-            perror("sendto failed");
-            return -1;
-        }
-
-        printf("Sent ACK packet\n");
-
-        return 0; // Handshake successful
-    } else {
-        printf("Invalid SYNACK packet\n");
-        return -1; // Handshake failed
-    }
+    return 0; // Handshake successful
 }
 
 int rudp_accept(int sockfd, struct sockaddr_in *dest_addr, socklen_t addrlen) {
-    RudpPacket syn_packet, synack_packet, ack_packet;
+    RudpPacket syn_packet, synack_packet;
     socklen_t* len = &addrlen;
 
     // Receive SYN packet
@@ -75,40 +192,22 @@ int rudp_accept(int sockfd, struct sockaddr_in *dest_addr, socklen_t addrlen) {
         // Prepare SYNACK packet
         synack_packet.length = htons(0); // No data in ACK packet
         synack_packet.flags = FLAG_ACK + FLAG_SYN;
-        synack_packet.seq_num = syn_packet.seq_num+1;//incrementing the sequence number, the new sequence number is the sequence number of the expected packet
+        synack_packet.seq_num = syn_packet.seq_num;
         // Send SYNACK packet
-        if (rudp_send(sockfd, &synack_packet, dest_addr, addrlen) < 0) {
+        printf("Sending SYNACK packet\n");
+        if (rudp_send_with_timer(sockfd, &synack_packet, dest_addr, addrlen,TIMEOUT) < 0) {
             perror("sendto failed");
             return -1;
         }
-
+        return 0;
     } else {
         printf("Invalid SYN packet\n");
         return -1; // Handshake failed
     }
-
-    printf("Sent SYNACK packet\n");
-
-    // Receive ACK packet
-    if (rudp_rcv(sockfd, &ack_packet, dest_addr, len) < 0) {
-        perror("recvfrom failed");
-        return -1;
-    }
-
-    printf("Received ACK packet\n");
-
-    // Check if it's a valid ACK packet
-    if (ack_packet.flags & FLAG_ACK) {
-        //printf("Connection established successfully\n");
-        return 0; // Handshake successful
-    }
-    //printf("Connection failed\n");
-    return -1; // Handshake failed
 }
 
 int rudp_close(int sockfd, struct sockaddr_in *dest_addr, socklen_t addrlen) {
-    RudpPacket fin_packet, ack_packet;
-    socklen_t* len = &addrlen;
+    RudpPacket fin_packet;
 
     // Prepare FIN packet
     fin_packet.length = htons(0); // No data in SYN packet
@@ -116,29 +215,11 @@ int rudp_close(int sockfd, struct sockaddr_in *dest_addr, socklen_t addrlen) {
     fin_packet.seq_num = ((unsigned int)rand()%256);
 
     // Send FIN packet
-    if (rudp_send(sockfd, &fin_packet, dest_addr, addrlen) < 0) {
+    if (rudp_send_with_timer(sockfd, &fin_packet, dest_addr, addrlen,TIMEOUT) < 0) {
         perror("sendto failed");
         return -1;
     }
-
-    printf("Sent FIN %d packet, waiting for ACK.\n",fin_packet.seq_num);
-
-    // Receive ACK packet
-    if (rudp_rcv(sockfd, &ack_packet, dest_addr, len) < 0) {
-        perror("recvfrom failed");
-        return -1;
-    }
-
-    printf("Received ACK packet for FIN\n");
-
-    // Check if it's a valid ACK packet
-    if (ack_packet.flags & FLAG_ACK) {
-        //printf("ACK seqnum: %d\n",ack_packet.seq_num);
-        //close(sockfd);
-        return 0; // Closing successful
-    }
-    printf("ack_packet isn't flagged ACK. Seqnum: %d. Flag: %d.\n",ack_packet.seq_num,ack_packet.flags);
-    return -1; // Closing failed
+    return 0;
 }
 
 unsigned short int calculate_checksum(void *data, unsigned int bytes) {
@@ -157,149 +238,3 @@ unsigned short int calculate_checksum(void *data, unsigned int bytes) {
         total_sum = (total_sum & 0xFFFF) + (total_sum >> 16);
     return (~((unsigned short int)total_sum));
 }
-
-//#include "rudp.h"
-//#include <stdio.h>
-//#include <stdlib.h>
-//#include <string.h>
-//#include <unistd.h>
-//#include <arpa/inet.h>
-//#include <sys/socket.h>
-//#include <netinet/in.h>
-//
-//int rudp_socket() {
-//    return socket(AF_INET, SOCK_DGRAM, 0);
-//}
-//
-//int rudp_send(int sockfd, const struct RudpHeader *packet, const struct sockaddr *dest_addr, socklen_t addrlen) {
-//    return sendto(sockfd, packet, sizeof(struct RudpPHeader) + ntohs(packet->length), 0, dest_addr, addrlen);
-//}
-//
-//int rudp_recv(int sockfd, struct RUDPHeader *packet, struct sockaddr *src_addr, socklen_t *addrlen) {
-//    return recvfrom(sockfd, packet, sizeof(struct RUDPHeader) + MAXLINE, 0, src_addr, addrlen);
-//}
-
-
-
-
-//
-//#include <stdio.h>
-//#include <stdlib.h>
-//#include <string.h>
-//#include <unistd.h>
-//#include <sys/socket.h>
-//#include <netinet/in.h>
-//#include <arpa/inet.h>
-//#include <time.h>
-//
-//#define PORT 8080
-//#define BUFFER_SIZE 1024
-//#define WINDOW_SIZE 4
-//#define TIMEOUT_SEC 1
-//
-//// Packet structure
-//struct Packet {
-//    int seq_num;
-//    int ack_num;
-//    int size;
-//    char data[BUFFER_SIZE];
-//};
-//
-//// Function to send a packet
-//void send_packet(int sockfd, struct sockaddr_in *receiver_addr, struct Packet *packet) {
-//    sendto(sockfd, packet, sizeof(struct Packet), 0, (struct sockaddr *)receiver_addr, sizeof(struct sockaddr_in));
-//}
-//
-//// Function to receive a packet
-//void receive_packet(int sockfd, struct sockaddr_in *sender_addr, struct Packet *packet) {
-//    socklen_t addr_len = sizeof(struct sockaddr_in);
-//    recvfrom(sockfd, packet->data, sizeof(struct Packet), 0, (struct sockaddr *)sender_addr, &addr_len);
-//}
-//
-//// Function to perform handshake (SYN, SYN-ACK, ACK)
-//void perform_handshake(int sockfd, struct sockaddr_in *sender_addr, struct sockaddr_in *receiver_addr) {
-//    struct Packet syn_packet, syn_ack_packet, ack_packet;
-//    syn_packet.seq_num = 0;
-//    syn_packet.ack_num = 0;
-//    syn_packet.size = 0;
-//    memset(syn_packet.data, 0, BUFFER_SIZE);
-//    send_packet(sockfd, receiver_addr, &syn_packet);
-//    printf("SYN sent\n");
-//
-//    receive_packet(sockfd, sender_addr, &syn_ack_packet);
-//    printf("SYN-ACK received\n");
-//
-//    ack_packet.seq_num = syn_ack_packet.ack_num;
-//    ack_packet.ack_num = syn_ack_packet.seq_num + 1;
-//    ack_packet.size = 0;
-//    memset(ack_packet.data, 0, BUFFER_SIZE);
-//    send_packet(sockfd, receiver_addr, &ack_packet);
-//    printf("ACK sent\n");
-//}
-//
-//// Function to perform connection teardown (FIN, FIN-ACK, ACK)
-//void perform_teardown(int sockfd, struct sockaddr_in *sender_addr, struct sockaddr_in *receiver_addr) {
-//    struct Packet fin_packet, fin_ack_packet, ack_packet;
-//    fin_packet.seq_num = 0;
-//    fin_packet.ack_num = 0;
-//    fin_packet.size = 0;
-//    memset(fin_packet.data, 0, BUFFER_SIZE);
-//    send_packet(sockfd, receiver_addr, &fin_packet);
-//    printf("FIN sent\n");
-//
-//    receive_packet(sockfd, sender_addr, &fin_ack_packet);
-//    printf("FIN-ACK received\n");
-//
-//    ack_packet.seq_num = fin_ack_packet.ack_num;
-//    ack_packet.ack_num = fin_ack_packet.seq_num + 1;
-//    ack_packet.size = 0;
-//    memset(ack_packet.data, 0, BUFFER_SIZE);
-//    send_packet(sockfd, receiver_addr, &ack_packet);
-//    printf("ACK sent\n");
-//}
-//
-//// Function to implement Go-Back-N protocol
-//void go_back_n(int sockfd, struct sockaddr_in *receiver_addr) {
-//    struct Packet packets[WINDOW_SIZE];
-//    int base = 0, nextseqnum = 0, n_packets = 0;
-//    int congestion_window = 1; // Initial congestion window size
-//    int ssthresh = WINDOW_SIZE; // Initial slow start threshold
-//    srand(time(NULL));
-//
-//    while (1) {
-//        // Send packets
-//        while (n_packets < congestion_window && nextseqnum < 10) {
-//            packets[nextseqnum % WINDOW_SIZE].seq_num = nextseqnum;
-//            packets[nextseqnum % WINDOW_SIZE].ack_num = 0;
-//            packets[nextseqnum % WINDOW_SIZE].size = BUFFER_SIZE;
-//            for (int i = 0; i < BUFFER_SIZE; i++)
-//                packets[nextseqnum % WINDOW_SIZE].data[i] = rand() % 256;
-//
-//            send_packet(sockfd, receiver_addr, &packets[nextseqnum % WINDOW_SIZE]);
-//            printf("Packet sent: %d\n", nextseqnum);
-//            nextseqnum++;
-//            n_packets++;
-//        }
-//
-//        // Receive acknowledgments
-//        struct Packet ack_packet;
-//        while (recvfrom(sockfd, &ack_packet, sizeof(struct Packet), MSG_DONTWAIT, NULL, NULL) > 0) {
-//            printf("ACK received: %d\n", ack_packet.ack_num);
-//            if (ack_packet.ack_num >= base) {
-//                base = ack_packet.ack_num + 1;
-//                n_packets--;
-//                if (congestion_window < ssthresh) {
-//                    congestion_window *= 2; // Slow start phase
-//                } else {
-//                    congestion_window++; // Congestion avoidance phase
-//                }
-//            }
-//        }
-//
-//        // Timeout handling and congestion control
-//        sleep(TIMEOUT_SEC);
-//        ssthresh = congestion_window / 2; // Set slow start threshold
-//        congestion_window = 1; // Reset congestion window to 1 after timeout
-//    }
-//}
-
