@@ -29,32 +29,27 @@ char *util_generate_random_data(unsigned int size) {
         *(buffer + i) = ((unsigned int) rand() % 256);
     return buffer;
 }
+
 int main(int argc, char *argv[]) {
     puts("Starting Sender...\n");
 
-    if (argc != 5)
-    {
+    if (argc != 5) {
         puts("invalid command");
         return 1;
     }
     int port = 0;
     char SERVER_IP[20] = {0};
-    for (int i = 1; i < argc; i++)
-    {
-        if (strcmp(argv[i], "-p") == 0)
-        {
+    for (int i = 1; i < argc; i++) {
+        if (strcmp(argv[i], "-p") == 0) {
             port = atoi(argv[i + 1]);
-        }
-        else if (strcmp(argv[i], "-ip") == 0)
-        {
+        } else if (strcmp(argv[i], "-ip") == 0) {
             strcpy(SERVER_IP, argv[i + 1]);
         }
     }
 
     // Create socket
     int sockfd = rudp_socket();
-    if (sockfd < 0)
-    {
+    if (sockfd < 0) {
         perror("Socket creation error");
         exit(EXIT_FAILURE);
     }
@@ -72,35 +67,39 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    char* file = util_generate_random_data(FILE_SIZE);
+    char *file = util_generate_random_data(FILE_SIZE);
+    int status = 1;
+    while (status == 1) {
+        // Perform handshake
+        int seqnum = rudp_connect(sockfd, &receiver_addr, sizeof(receiver_addr), 0);
+        if (seqnum < 0) {
+            perror("connection failed");
+            return -1;
+        }
+        puts("Connected successfully");
 
-    // Perform handshake
-    int seqnum = rudp_connect(sockfd, &receiver_addr, sizeof(receiver_addr), 0);
-    if (seqnum < 0) {
-        perror("connection failed");
-        return -1;
+        // Send data
+        if (rudp_send_file(file, sockfd, receiver_addr, seqnum) < 0) {
+            perror("send file failed");
+            return -1;
+        }
+
+        puts("Finished sending data. Closing connection");
+        //finish sending, and receive the last ack, close the rudp connection
+        //packet->flags = FLAG_FIN;
+        if (rudp_close(sockfd, &receiver_addr, sizeof(receiver_addr), 0) == -1) {
+            perror("close failed");
+
+            return -1;
+        }
+
+        puts("Sender finished successfully");
+
+
+        puts("would you like to send the file again? (0 to exit, 1 to resend)");
+        scanf("%d", &status);
     }
-    puts("Connected successfully");
-
-    // Send data
-    if( rudp_send_file(file, sockfd, receiver_addr,  seqnum)<0) {
-        perror("send file failed");
-        return -1;
-    }
-    for (int i = 0; i < 50; i++) {
-        putc(file[i],stdout);
-    }
-
-    puts("Finished sending data. Closing connection");
-    //finish sending, and receive the last ack, close the rudp connection
-    //packet->flags = FLAG_FIN;
-    if(rudp_close(sockfd, &receiver_addr, sizeof(receiver_addr),0)==-1){
-        perror("close failed");
-
-        return -1;
-    }
-
-    puts("Sender finished successfully");
     close(sockfd);
+    //to print stats
     return 0;
 }

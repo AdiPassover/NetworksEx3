@@ -14,6 +14,8 @@
 
 #define MAXLINE 2048
 #define FILE_SIZE 2000000
+#define MAX_RUNS 100
+
 #define FLAG_ACK 1
 #define FLAG_SYN 2
 #define FLAG_FIN 4
@@ -26,6 +28,8 @@ typedef struct _RudpPacket {
     uint16_t checksum;
     uint8_t flags;
     int seq_num;
+    ulong sec;
+    ulong usec;
     char data[MAXLINE];
 
 } RudpPacket;
@@ -33,7 +37,7 @@ typedef struct _RudpPacket {
 int rudp_send_file(char* file, int sockfd, struct sockaddr_in receiver_addr,int seqNum);
 
 
-int rudp_rcv_file(char* file, int sockfd, struct sockaddr_in receiver_addr, int seqNum);
+int rudp_rcv_file(char* file, int sockfd, struct sockaddr_in receiver_addr, int seqNum,double* time, int* run);
 
 
 /*

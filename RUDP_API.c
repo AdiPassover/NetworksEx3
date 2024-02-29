@@ -52,12 +52,16 @@ int rudp_socket() {
 int rudp_send_file(char* file, int sockfd, struct sockaddr_in receiver_addr, int seqNum) {
     RudpPacket packet;
     packet.seq_num = seqNum;
+    struct timeval tv;
     for (int i = 0; i < FILE_SIZE; i+=MAXLINE){
         memcpy(packet.data, file+i, MAXLINE);
         packet.length = htons(MAXLINE);
         packet.flags = 0;
         packet.checksum = calculate_checksum(packet.data, packet.length);
         printf("Sending packet %d\n",packet.seq_num);
+        gettimeofday(&tv,NULL);
+        packet.usec = tv.tv_usec;
+        packet.sec = tv.tv_sec;
         if (rudp_send_with_timer(sockfd, &packet, &receiver_addr, sizeof(receiver_addr),TIMEOUT) < 0){
             perror("sendto failed");
             //free(packet);
@@ -268,9 +272,12 @@ int rudp_accept(int sockfd, struct sockaddr_in *dest_addr, socklen_t addrlen) {
     socklen_t *len = &addrlen;
 
     // Receive SYN packet
-    if (rudp_rcv(sockfd, &syn_packet, dest_addr, len) < 0) {
+    int status = rudp_rcv_with_timer(sockfd, &syn_packet, dest_addr, len,5000000);
+    if (status < 0) {
         perror("rcv failed");
         return -1;
+    } else if (status == 0) {
+        return -2;
     }
 
     // Check if it's a valid SYN packet
@@ -365,18 +372,29 @@ int rudp_close(int sockfd, struct sockaddr_in *dest_addr, socklen_t addrlen, int
     return 0;
 }
 
-int rudp_rcv_file(char* file, int sockfd, struct sockaddr_in sender_addr, int seqNum) {
+int rudp_rcv_file(char* file, int sockfd, struct sockaddr_in sender_addr, int seqNum, double times[], int* currentRun) {
     RudpPacket packet;
     char* current = &file[0];
     socklen_t sender_addr_len = sizeof(sender_addr);
+    struct timeval start, end;
+    int first = 1;
     while (1) {
         printf("Waiting for packet %d\n",seqNum);
         ssize_t bytes_recv = rudp_rcv(sockfd, &packet, &sender_addr, &sender_addr_len);
         while (bytes_recv < 0) {
             bytes_recv = rudp_rcv(sockfd, &packet, &sender_addr, &sender_addr_len);
         }
+        if (first) {
+            first = 0;
+            start.tv_sec = packet.sec;
+            start.tv_usec = packet.usec;
+        }
         if ((packet.flags & FLAG_FIN)) {
             printf("Received FIN packet %d.\n",packet.seq_num);
+            gettimeofday(&end,NULL);
+            times[*currentRun] = (end.tv_sec - start.tv_sec) * 1000.0;
+            times[*currentRun] += (end.tv_usec - start.tv_usec) / 1000.0;
+            (*currentRun)++;
             return 0;
         }
         printf("Received packet %d\n",packet.seq_num);
