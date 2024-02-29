@@ -6,10 +6,13 @@ int rudp_socket() {
 }
 
 ssize_t rudp_send(int sockfd, const RudpPacket *rudp_packet, struct sockaddr_in *serv_addr, socklen_t addrlen) {
-    return sendto(sockfd, (const char *)rudp_packet, sizeof(RudpPacket) + rudp_packet->length, 0, (struct sockaddr *) serv_addr, addrlen);
+    return sendto(sockfd, (const char *) rudp_packet, sizeof(RudpPacket) + rudp_packet->length, 0,
+                  (struct sockaddr *) serv_addr, addrlen);
 }
 
-ssize_t rudp_send_with_timer(int sockfd, const RudpPacket *rudp_packet, struct sockaddr_in *serv_addr, socklen_t addrlen, int timeout) {
+ssize_t
+rudp_send_with_timer(int sockfd, const RudpPacket *rudp_packet, struct sockaddr_in *serv_addr, socklen_t addrlen,
+                     int timeout) {
     ssize_t bytes_sent;
     struct timeval tv;
     fd_set readfds;
@@ -17,10 +20,10 @@ ssize_t rudp_send_with_timer(int sockfd, const RudpPacket *rudp_packet, struct s
     // Set timeout for socket
     tv.tv_sec = timeout / 1000000;
     tv.tv_usec = timeout % 1000000;
-    setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, (const char*)&tv, sizeof(tv));
+    setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, (const char *) &tv, sizeof(tv));
 
     // Send the packet
-    bytes_sent = rudp_send(sockfd,rudp_packet,serv_addr,addrlen);
+    bytes_sent = rudp_send(sockfd, rudp_packet, serv_addr, addrlen);
     if (bytes_sent < 0) {
         perror("sendto failed");
         return -1;
@@ -36,7 +39,7 @@ ssize_t rudp_send_with_timer(int sockfd, const RudpPacket *rudp_packet, struct s
             perror("select failed");
             return -1;
         } else if (ready == 0) { // Timeout reached, resend the packet and reset the timer
-            bytes_sent = rudp_send(sockfd,rudp_packet,serv_addr,addrlen);
+            bytes_sent = rudp_send(sockfd, rudp_packet, serv_addr, addrlen);
             if (bytes_sent < 0) {
                 perror("sendto failed");
                 return -1;
@@ -44,12 +47,12 @@ ssize_t rudp_send_with_timer(int sockfd, const RudpPacket *rudp_packet, struct s
             // Reset the timer
             tv.tv_sec = timeout / 1000000;
             tv.tv_usec = timeout % 1000000;
-            printf("Timeout for packet %d\n",rudp_packet->seq_num);
+            printf("Timeout for packet %d\n", rudp_packet->seq_num);
             continue; // Continue waiting for ACK
         } else {
             // Socket is ready to read, check for ACK
             RudpPacket ack_packet;
-            ssize_t bytes_received = rudp_rcv(sockfd,&ack_packet,serv_addr,&addrlen);
+            ssize_t bytes_received = rudp_rcv(sockfd, &ack_packet, serv_addr, &addrlen);
             if (bytes_received < 0) {
                 perror("recvfrom failed");
                 return -1;
@@ -57,7 +60,7 @@ ssize_t rudp_send_with_timer(int sockfd, const RudpPacket *rudp_packet, struct s
             // Check if received packet is an ACK with the same seqnum
             if ((ack_packet.flags & FLAG_ACK) && ack_packet.seq_num == rudp_packet->seq_num) {
                 // ACK received, return
-                printf("Received ACK %d\n",ack_packet.seq_num);
+                printf("Received ACK %d\n", ack_packet.seq_num);
                 return bytes_received;
             }
             // If not an ACK with the same seqnum, continue waiting
@@ -66,10 +69,12 @@ ssize_t rudp_send_with_timer(int sockfd, const RudpPacket *rudp_packet, struct s
 }
 
 ssize_t rudp_rcv(int socketfd, RudpPacket *rudp_packet, struct sockaddr_in *src_addr, socklen_t *addrlen) {
-    return recvfrom(socketfd, rudp_packet, sizeof(RudpPacket) + rudp_packet->length, 0, (struct sockaddr *) src_addr, addrlen);
+    return recvfrom(socketfd, rudp_packet, sizeof(RudpPacket) + rudp_packet->length, 0, (struct sockaddr *) src_addr,
+                    addrlen);
 }
 
-int rudp_rcv_with_timer(int sockfd, RudpPacket *rudp_packet, struct sockaddr_in *src_addr, socklen_t *addrlen, int timeout) {
+int rudp_rcv_with_timer(int sockfd, RudpPacket *rudp_packet, struct sockaddr_in *src_addr, socklen_t *addrlen,
+                        int timeout) {
     struct timeval tv;
     fd_set readfds;
 
@@ -91,7 +96,7 @@ int rudp_rcv_with_timer(int sockfd, RudpPacket *rudp_packet, struct sockaddr_in 
         return 0;
     } else {
         // Data available, receive the packet
-        ssize_t bytes_received = rudp_rcv(sockfd,rudp_packet,src_addr,addrlen);
+        ssize_t bytes_received = rudp_rcv(sockfd, rudp_packet, src_addr, addrlen);
         if (bytes_received < 0) {
             perror("recvfrom failed");
             return -1;
@@ -110,7 +115,7 @@ int rudp_connect(int sockfd, struct sockaddr_in *dest_addr, socklen_t addrlen) {
     // Set timeout for socket
     tv.tv_sec = TIMEOUT / 1000000;
     tv.tv_usec = TIMEOUT % 1000000;
-    setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, (const char*)&tv, sizeof(tv));
+    setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, (const char *) &tv, sizeof(tv));
 
     // Prepare SYN packet
     syn_packet.length = htons(0); // No data in SYN packet
@@ -118,12 +123,12 @@ int rudp_connect(int sockfd, struct sockaddr_in *dest_addr, socklen_t addrlen) {
     syn_packet.seq_num = 0;
 
     // Send the packet
-    bytes_sent = rudp_send(sockfd,&syn_packet,dest_addr,addrlen);
+    bytes_sent = rudp_send(sockfd, &syn_packet, dest_addr, addrlen);
     if (bytes_sent < 0) {
         perror("sendto failed");
         return -1;
     }
-    printf("Sent SYN %d\n",syn_packet.seq_num);
+    printf("Sent SYN %d\n", syn_packet.seq_num);
 
     // Wait for ACK with the same seqnum
     while (1) {
@@ -135,7 +140,7 @@ int rudp_connect(int sockfd, struct sockaddr_in *dest_addr, socklen_t addrlen) {
             perror("select failed");
             return -1;
         } else if (ready == 0) { // Timeout reached, resend the packet and reset the timer
-            bytes_sent = rudp_send(sockfd,&syn_packet,dest_addr,addrlen);
+            bytes_sent = rudp_send(sockfd, &syn_packet, dest_addr, addrlen);
             if (bytes_sent < 0) {
                 perror("sendto failed");
                 return -1;
@@ -143,19 +148,20 @@ int rudp_connect(int sockfd, struct sockaddr_in *dest_addr, socklen_t addrlen) {
             // Reset the timer
             tv.tv_sec = TIMEOUT / 1000000;
             tv.tv_usec = TIMEOUT % 1000000;
-            printf("Timeout for SYN %d\n",syn_packet.seq_num);
+            printf("Timeout for SYN %d\n", syn_packet.seq_num);
             continue; // Continue waiting for ACK
         } else {
             // Socket is ready to read, check for ACK
-            ssize_t bytes_received = rudp_rcv(sockfd,&synack_packet,dest_addr,&addrlen);
+            ssize_t bytes_received = rudp_rcv(sockfd, &synack_packet, dest_addr, &addrlen);
             if (bytes_received < 0) {
                 perror("recvfrom failed");
                 return -1;
             }
             // Check if received packet is an ACK with the same seqnum
-            if ((synack_packet.flags & FLAG_SYN) && (synack_packet.flags & FLAG_ACK) && synack_packet.seq_num == syn_packet.seq_num) {
+            if ((synack_packet.flags & FLAG_SYN) && (synack_packet.flags & FLAG_ACK) &&
+                synack_packet.seq_num == syn_packet.seq_num) {
                 // ACK received, return
-                printf("Received SYNACK %d\n",synack_packet.seq_num);
+                printf("Received SYNACK %d\n", synack_packet.seq_num);
                 break;
             }
             // If not an ACK with the same seqnum, continue waiting
@@ -172,14 +178,27 @@ int rudp_connect(int sockfd, struct sockaddr_in *dest_addr, socklen_t addrlen) {
         return -1;
     }
 
-    printf("Sent ACK packet %d\n",ack_packet.seq_num);
+    printf("Sent ACK packet %d\n", ack_packet.seq_num);
+
+    while (rudp_rcv_with_timer(sockfd,&synack_packet,dest_addr, &addrlen,TIMEOUT*2)) {
+        RudpPacket reack_packet;
+        reack_packet.length = htons(0); // No data in ACK packet
+        reack_packet.flags = FLAG_ACK;
+        reack_packet.seq_num = synack_packet.seq_num; // the squence number of the expected
+
+        // Send ACK packet
+        if (rudp_send(sockfd, &reack_packet, dest_addr, sizeof(addrlen)) < 0) {
+            perror("sendto failed");
+            return -1;
+        }
+    }
 
     return 0; // Handshake successful
 }
 
 int rudp_accept(int sockfd, struct sockaddr_in *dest_addr, socklen_t addrlen) {
     RudpPacket syn_packet, synack_packet;
-    socklen_t* len = &addrlen;
+    socklen_t *len = &addrlen;
 
     // Receive SYN packet
     if (rudp_rcv(sockfd, &syn_packet, dest_addr, len) < 0) {
@@ -195,7 +214,7 @@ int rudp_accept(int sockfd, struct sockaddr_in *dest_addr, socklen_t addrlen) {
         synack_packet.seq_num = syn_packet.seq_num;
         // Send SYNACK packet
         printf("Sending SYNACK packet\n");
-        if (rudp_send_with_timer(sockfd, &synack_packet, dest_addr, addrlen,TIMEOUT) < 0) {
+        if (rudp_send_with_timer(sockfd, &synack_packet, dest_addr, addrlen, TIMEOUT) < 0) {
             perror("sendto failed");
             return -1;
         }
@@ -212,10 +231,10 @@ int rudp_close(int sockfd, struct sockaddr_in *dest_addr, socklen_t addrlen) {
     // Prepare FIN packet
     fin_packet.length = htons(0); // No data in SYN packet
     fin_packet.flags = FLAG_FIN;
-    fin_packet.seq_num = ((unsigned int)rand()%256);
+    fin_packet.seq_num = ((unsigned int) rand() % 256);
 
     // Send FIN packet
-    if (rudp_send_with_timer(sockfd, &fin_packet, dest_addr, addrlen,TIMEOUT) < 0) {
+    if (rudp_send_with_timer(sockfd, &fin_packet, dest_addr, addrlen, TIMEOUT) < 0) {
         perror("sendto failed");
         return -1;
     }
@@ -223,7 +242,7 @@ int rudp_close(int sockfd, struct sockaddr_in *dest_addr, socklen_t addrlen) {
 }
 
 unsigned short int calculate_checksum(void *data, unsigned int bytes) {
-    unsigned short int *data_pointer = (unsigned short int *)data;
+    unsigned short int *data_pointer = (unsigned short int *) data;
     unsigned int total_sum = 0;
     // Main summing loop
     while (bytes > 1) {
@@ -232,9 +251,9 @@ unsigned short int calculate_checksum(void *data, unsigned int bytes) {
     }
     // Add left-over byte, if any
     if (bytes > 0)
-        total_sum += *((unsigned char *)data_pointer);
+        total_sum += *((unsigned char *) data_pointer);
     // Fold 32-bit sum to 16 bits
     while (total_sum >> 16)
         total_sum = (total_sum & 0xFFFF) + (total_sum >> 16);
-    return (~((unsigned short int)total_sum));
+    return (~((unsigned short int) total_sum));
 }

@@ -63,7 +63,7 @@ int main(int argc, char *argv[]) {
 
     // Set up receiver address
     struct sockaddr_in receiver_addr;
-    socklen_t rec_len = sizeof(receiver_addr);
+    //socklen_t rec_len = sizeof(receiver_addr);
     memset(&receiver_addr, 0, sizeof(receiver_addr));
     receiver_addr.sin_family = AF_INET;
     receiver_addr.sin_port = htons(port);
@@ -76,28 +76,14 @@ int main(int argc, char *argv[]) {
 
     char* file = util_generate_random_data(FILE_SIZE);
 
-
-
     // Perform handshake
     int seqnum = rudp_connect(sockfd, &receiver_addr, sizeof(receiver_addr));
     if (seqnum < 0) {
         perror("connection failed");
         return -1;
     }
-    // wait a little to ensure no retransmission of SYNACK
-    RudpPacket synack_packet;
-    while (rudp_rcv_with_timer(sockfd,&synack_packet,&receiver_addr, &rec_len,TIMEOUT*2)) {
-        RudpPacket reack_packet;
-        reack_packet.length = htons(0); // No data in ACK packet
-        reack_packet.flags = FLAG_ACK;
-        reack_packet.seq_num = synack_packet.seq_num; // the squence number of the expected
 
-        // Send ACK packet
-        if (rudp_send(sockfd, &reack_packet, &receiver_addr, sizeof(receiver_addr)) < 0) {
-            perror("sendto failed");
-            return -1;
-        }
-    }
+
     puts("Connected successfully");
     // Send data 
     RudpPacket packet;
