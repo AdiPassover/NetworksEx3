@@ -1,17 +1,81 @@
 #include "RUDP_API.h"
+ssize_t rudp_send(int sockfd, const RudpPacket *rudp_packet, struct sockaddr_in *serv_addr, socklen_t addrlen);
+
+/*
+ * Sending data to the peer. The function should wait for an acknowledgment packet,
+ * and if it didn’t receive any in timeout microseconds, retransmits the data.
+ * Return the bits sent.
+ */
+ssize_t rudp_send_with_timer(int sockfd, const RudpPacket *rudp_packet, struct sockaddr_in *serv_addr, socklen_t addrlen, int timeout);
+
+/*
+ * Receive data from a peer.
+ */
+ssize_t rudp_rcv(int socketfd, RudpPacket *rudp_packet, struct sockaddr_in *src_addr, socklen_t *addrlen);
+
+/*
+ * Receive data from a peer.
+ * If no data received in timeout microseconds returns 0.
+ */
+int rudp_rcv_with_timer(int sockfd, RudpPacket *rudp_packet, struct sockaddr_in *src_addr, socklen_t *addrlen, int timeout);
+
+/*
+ * Accept a connection from a peer
+ * Returns -1 if failure.
+ */
+int rudp_accept(int sockfd, struct sockaddr_in *dest_addr, socklen_t addrlen);
+
+/*
+ * Offer a handshake in order to establish a connection with a peer.
+ * Returns -1 if failure.
+ */
+int rudp_connect(int sockfd, struct sockaddr_in *dest_addr, socklen_t addrlen, int side);
+
+/*
+* @brief A checksum function that returns 16 bit checksum for data.
+* @param data The data to do the checksum for.
+* @param bytes The length of the data in bytes.
+* @return The checksum itself as 16 bit unsigned number.
+* @note This function is taken from RFC1071, can be found here:
+* @note https://tools.ietf.org/html/rfc1071
+* @note It is the simplest way to calculate a checksum and is not very strong.
+* However, it is good enough for this assignment.
+* @note You are free to use any other checksum function as well.
+* You can also use this function as such without any change.
+*/
+unsigned short int calculate_checksum(void *data, unsigned int bytes);
 
 
 int rudp_socket() {
     return socket(AF_INET, SOCK_DGRAM, 0);
 }
+int rudp_send_file(char* file, int sockfd, struct sockaddr_in receiver_addr, int seqNum) {
+    RudpPacket packet;
+    packet.seq_num = seqNum;
+    for (int i = 0; i < FILE_SIZE; i+=MAXLINE){
+        memcpy(packet.data, file+i, MAXLINE);
+        packet.length = htons(MAXLINE);
+        packet.flags = 0;
+        packet.checksum = calculate_checksum(packet.data, packet.length);
+        printf("Sending packet %d\n",packet.seq_num);
+        if (rudp_send_with_timer(sockfd, &packet, &receiver_addr, sizeof(receiver_addr),TIMEOUT) < 0){
+            perror("sendto failed");
+            //free(packet);
+            return -1;
+        }
+        //printf("Sent packet %d\n", packet.seq_num);
+        packet.seq_num++;
+    }
+    return 0;
+}
+
 
 ssize_t rudp_send(int sockfd, const RudpPacket *rudp_packet, struct sockaddr_in *serv_addr, socklen_t addrlen) {
     return sendto(sockfd, (const char *) rudp_packet, sizeof(RudpPacket) + rudp_packet->length, 0,
                   (struct sockaddr *) serv_addr, addrlen);
 }
 
-ssize_t
-rudp_send_with_timer(int sockfd, const RudpPacket *rudp_packet, struct sockaddr_in *serv_addr, socklen_t addrlen,
+ssize_t rudp_send_with_timer(int sockfd, const RudpPacket *rudp_packet, struct sockaddr_in *serv_addr, socklen_t addrlen,
                      int timeout) {
     ssize_t bytes_sent;
     struct timeval tv;
@@ -105,7 +169,10 @@ int rudp_rcv_with_timer(int sockfd, RudpPacket *rudp_packet, struct sockaddr_in 
     }
 }
 
-int rudp_connect(int sockfd, struct sockaddr_in *dest_addr, socklen_t addrlen) {
+int rudp_connect(int sockfd, struct sockaddr_in *dest_addr, socklen_t addrlen, int side) {
+    if(side == 1) {
+        return rudp_accept(sockfd, dest_addr, addrlen);
+    }
     RudpPacket syn_packet, synack_packet, ack_packet;
     //socklen_t* len = &addrlen;
     ssize_t bytes_sent;
@@ -225,7 +292,60 @@ int rudp_accept(int sockfd, struct sockaddr_in *dest_addr, socklen_t addrlen) {
     }
 }
 
-int rudp_close(int sockfd, struct sockaddr_in *dest_addr, socklen_t addrlen) {
+int rudp_close_sender(int sockfd, struct sockaddr_in receiver_addr) {
+    // Wait for the FIN from receiver
+    RudpPacket last_packet;
+    socklen_t len = sizeof(receiver_addr);
+    ssize_t bytes_recv = rudp_rcv(sockfd, &last_packet, &receiver_addr, &len);
+    while (bytes_recv < 0) {
+        bytes_recv = rudp_rcv(sockfd, &last_packet, &receiver_addr, &len);
+    }
+    if (!(last_packet.flags & FLAG_FIN)) {
+        perror("last packet received needs to be FIN");
+        return -1;
+    }
+
+    printf("Received FIN %d\n",last_packet.seq_num);
+    // ACK the FIN
+    last_packet.flags = FLAG_ACK;
+    if (rudp_send(sockfd, &last_packet, &receiver_addr, sizeof(receiver_addr)) < 0) {
+        perror("sendto failed");
+        //free(packet);
+        return -1;
+    }
+
+    // wait a little to ensure no FIN retransmission
+    while (rudp_rcv_with_timer(sockfd,&last_packet,&receiver_addr,&len,TIMEOUT*2)) {
+        if (!(last_packet.flags & FLAG_FIN)) {
+            perror("last packet received needs to be FIN");
+            return -1;
+        }
+
+        printf("Received FIN %d\n",last_packet.seq_num);
+        // ACK the FIN
+        last_packet.flags = FLAG_ACK;
+        if (rudp_send(sockfd, &last_packet, &receiver_addr, sizeof(receiver_addr)) < 0) {
+            perror("sendto failed");
+            return -1;
+        }
+    }
+    return 0;
+}
+
+int rudp_close(int sockfd, struct sockaddr_in *dest_addr, socklen_t addrlen, int side) { //side 0 means sender, 1 means receiver
+    RudpPacket packet;
+    if (side == 1) {
+        packet.flags = FLAG_ACK;
+        rudp_send(sockfd, &packet, dest_addr, addrlen);
+        puts("Sent ACK for FIN");
+
+        // wait a little to ensure no FIN retransmission
+        while (rudp_rcv_with_timer(sockfd,&packet,dest_addr,&addrlen,TIMEOUT*2)) {
+            packet.flags = FLAG_ACK;
+            rudp_send(sockfd, &packet, dest_addr, addrlen);
+            puts("Sent ACK for FIN");
+        }
+    }
     RudpPacket fin_packet;
 
     // Prepare FIN packet
@@ -238,8 +358,51 @@ int rudp_close(int sockfd, struct sockaddr_in *dest_addr, socklen_t addrlen) {
         perror("sendto failed");
         return -1;
     }
+
+    if (side == 0) { // if it's the sender wait for the FIN
+        return rudp_close_sender(sockfd, *dest_addr);
+    }
     return 0;
 }
+
+int rudp_rcv_file(char* file, int sockfd, struct sockaddr_in sender_addr, int seqNum) {
+    RudpPacket packet;
+    char* current = &file[0];
+    socklen_t sender_addr_len = sizeof(sender_addr);
+    while (1) {
+        printf("Waiting for packet %d\n",seqNum);
+        ssize_t bytes_recv = rudp_rcv(sockfd, &packet, &sender_addr, &sender_addr_len);
+        while (bytes_recv < 0) {
+            bytes_recv = rudp_rcv(sockfd, &packet, &sender_addr, &sender_addr_len);
+        }
+        if ((packet.flags & FLAG_FIN)) {
+            printf("Received FIN packet %d.\n",packet.seq_num);
+            return 0;
+        }
+        printf("Received packet %d\n",packet.seq_num);
+        packet.flags = FLAG_ACK;
+        //if the packet is not the expected one or the checksum is not correct, ask for retransmission
+        if (packet.seq_num != seqNum || calculate_checksum(packet.data, packet.length) != packet.checksum) {
+            packet.seq_num = seqNum-1;
+            printf("Packet had error. Sending ACK With previous seqnum %d\n",packet.seq_num);
+            rudp_send(sockfd, &packet, &sender_addr, sizeof(sender_addr));
+        }
+        else //if the packet is the expected one and the checksum is correct, send an ack, and update the sequence number for the next packet
+        {
+            //acked = 1;
+            packet.seq_num = seqNum;
+            printf("Packet is good. Sending ACK %d\n",packet.seq_num);
+            rudp_send(sockfd, &packet, &sender_addr, sizeof(sender_addr));
+            seqNum++;
+            char* data = packet.data;
+            for (int i = 0; i < packet.length; i++) {
+                *current=data[i];
+                current++;
+            }
+        }
+    }
+}
+
 
 unsigned short int calculate_checksum(void *data, unsigned int bytes) {
     unsigned short int *data_pointer = (unsigned short int *) data;

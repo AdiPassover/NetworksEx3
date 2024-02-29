@@ -13,6 +13,7 @@
 #include <sys/socket.h>
 
 #define MAXLINE 2048
+#define FILE_SIZE 2000000
 #define FLAG_ACK 1
 #define FLAG_SYN 2
 #define FLAG_FIN 4
@@ -28,6 +29,11 @@ typedef struct _RudpPacket {
     char data[MAXLINE];
 
 } RudpPacket;
+
+int rudp_send_file(char* file, int sockfd, struct sockaddr_in receiver_addr,int seqNum);
+
+
+int rudp_rcv_file(char* file, int sockfd, struct sockaddr_in receiver_addr, int seqNum);
 
 
 /*
@@ -68,13 +74,13 @@ int rudp_accept(int sockfd, struct sockaddr_in *dest_addr, socklen_t addrlen);
  * Offer a handshake in order to establish a connection with a peer.
  * Returns -1 if failure.
  */
-int rudp_connect(int sockfd, struct sockaddr_in *dest_addr, socklen_t addrlen);
+int rudp_connect(int sockfd, struct sockaddr_in *dest_addr, socklen_t addrlen, int side);
 
 /*
  * Closes a connection from a peer
  * Returns -1 if failure.
  */
-int rudp_close(int sockfd, struct sockaddr_in *dest_addr, socklen_t addrlen);
+int rudp_close(int sockfd, struct sockaddr_in *dest_addr, socklen_t addrlen, int side);
 
 /*
 * @brief A checksum function that returns 16 bit checksum for data.

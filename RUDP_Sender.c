@@ -9,8 +9,6 @@
 #include <unistd.h>
 #include "RUDP_API.h"
 
-#define FILE_SIZE 2000000
-
 /*
 * @brief A random data generator function based on srand() and rand().
 * @param size The size of the data to generate (up to 2^32 bytes).
@@ -77,75 +75,29 @@ int main(int argc, char *argv[]) {
     char* file = util_generate_random_data(FILE_SIZE);
 
     // Perform handshake
-    int seqnum = rudp_connect(sockfd, &receiver_addr, sizeof(receiver_addr));
+    int seqnum = rudp_connect(sockfd, &receiver_addr, sizeof(receiver_addr), 0);
     if (seqnum < 0) {
         perror("connection failed");
         return -1;
     }
-
-
     puts("Connected successfully");
-    // Send data 
-    RudpPacket packet;
-    packet.seq_num = seqnum;
-    for(int i = 0; i < FILE_SIZE; i+=MAXLINE){
-        memcpy(packet.data, file+i, MAXLINE);
-        packet.length = htons(MAXLINE);
-        packet.flags = 0;
-        packet.checksum = calculate_checksum(packet.data, packet.length);
-        printf("Sending packet %d\n",packet.seq_num);
-        if (rudp_send_with_timer(sockfd, &packet, &receiver_addr, sizeof(receiver_addr),TIMEOUT) < 0){
-            perror("sendto failed");
-            //free(packet);
-            return -1;
-        }
-        //printf("Sent packet %d\n", packet.seq_num);
-        packet.seq_num++;
+
+    // Send data
+    if( rudp_send_file(file, sockfd, receiver_addr,  seqnum)<0) {
+        perror("send file failed");
+        return -1;
     }
+    for (int i = 0; i < 50; i++) {
+        putc(file[i],stdout);
+    }
+
     puts("Finished sending data. Closing connection");
     //finish sending, and receive the last ack, close the rudp connection
     //packet->flags = FLAG_FIN;
-    if(rudp_close(sockfd, &receiver_addr, sizeof(receiver_addr))==-1){
+    if(rudp_close(sockfd, &receiver_addr, sizeof(receiver_addr),0)==-1){
         perror("close failed");
-        //free(packet);
+
         return -1;
-    }
-
-    // Wait for the FIN from receiver
-    RudpPacket last_packet;
-    socklen_t len = sizeof(receiver_addr);
-    ssize_t bytes_recv = rudp_rcv(sockfd, &last_packet, &receiver_addr, &len);
-    while (bytes_recv < 0) {
-        bytes_recv = rudp_rcv(sockfd, &last_packet, &receiver_addr, &len);
-    }
-    if (!(last_packet.flags & FLAG_FIN)) {
-        perror("last packet received needs to be FIN");
-        return -1;
-    }
-
-    printf("Received FIN %d\n",last_packet.seq_num);
-    // ACK the FIN
-    last_packet.flags = FLAG_ACK;
-    if (rudp_send(sockfd, &last_packet, &receiver_addr, sizeof(receiver_addr)) < 0) {
-        perror("sendto failed");
-        //free(packet);
-        return -1;
-    }
-
-    // wait a little to ensure no FIN retransmission
-    while (rudp_rcv_with_timer(sockfd,&last_packet,&receiver_addr,&len,TIMEOUT*2)) {
-        if (!(last_packet.flags & FLAG_FIN)) {
-            perror("last packet received needs to be FIN");
-            return -1;
-        }
-
-        printf("Received FIN %d\n",last_packet.seq_num);
-        // ACK the FIN
-        last_packet.flags = FLAG_ACK;
-        if (rudp_send(sockfd, &last_packet, &receiver_addr, sizeof(receiver_addr)) < 0) {
-            perror("sendto failed");
-            return -1;
-        }
     }
 
     puts("Sender finished successfully");
