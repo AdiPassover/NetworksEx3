@@ -15,6 +15,7 @@
 #define MAXLINE 2048
 #define FILE_SIZE 2000000
 #define MAX_RUNS 100
+#define MAX_WAIT_TIME 10000000
 
 #define FLAG_ACK 1
 #define FLAG_SYN 2
@@ -48,7 +49,7 @@ int rudp_socket();
 
 /*
  * Offer a handshake in order to establish a connection with a peer.
- * Returns -1 if failure.
+ * Returns -1 if failure. Returns -2 if no answer.
  */
 int rudp_connect(int sockfd, struct sockaddr_in *dest_addr, socklen_t addrlen, int side);
 

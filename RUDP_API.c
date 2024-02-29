@@ -80,8 +80,7 @@ int rudp_send_file(char *file, int sockfd, struct sockaddr_in receiver_addr, int
 
 
 ssize_t rudp_send(int sockfd, const RudpPacket *rudp_packet, struct sockaddr_in *serv_addr, socklen_t addrlen) {
-    return sendto(sockfd, (const char *) rudp_packet, sizeof(RudpPacket) + rudp_packet->length, 0,
-                  (struct sockaddr *) serv_addr, addrlen);
+    return sendto(sockfd, (const char *)rudp_packet, sizeof(RudpPacket) + rudp_packet->length, 0, (struct sockaddr *) serv_addr, addrlen);
 }
 
 ssize_t
@@ -104,6 +103,7 @@ rudp_send_with_timer(int sockfd, const RudpPacket *rudp_packet, struct sockaddr_
     }
 
     // Wait for ACK with the same seqnum
+    int timeoutCount = 0;
     while (1) {
         FD_ZERO(&readfds);
         FD_SET(sockfd, &readfds);
@@ -121,7 +121,11 @@ rudp_send_with_timer(int sockfd, const RudpPacket *rudp_packet, struct sockaddr_
             // Reset the timer
             tv.tv_sec = timeout / 1000000;
             tv.tv_usec = timeout % 1000000;
-            printf("Timeout for packet %d\n", rudp_packet->seq_num);
+            timeoutCount++;
+            if (timeoutCount == MAX_WAIT_TIME) {
+                return -2;
+            }
+            //printf("Timeout for packet %d\n", rudp_packet->seq_num);
             continue; // Continue waiting for ACK
         } else {
             // Socket is ready to read, check for ACK
@@ -183,7 +187,7 @@ int rudp_connect(int sockfd, struct sockaddr_in *dest_addr, socklen_t addrlen, i
     if (side == 1) {
         return rudp_accept(sockfd, dest_addr, addrlen);
     }
-    RudpPacket syn_packet, synack_packet, ack_packet;
+    RudpPacket syn_packet, synack_packet;
     //socklen_t* len = &addrlen;
     ssize_t bytes_sent;
     struct timeval tv;
@@ -250,30 +254,34 @@ int rudp_connect(int sockfd, struct sockaddr_in *dest_addr, socklen_t addrlen, i
         }
     }
 
-    ack_packet.length = htons(0); // No data in ACK packet
-    ack_packet.flags = FLAG_ACK;
-    ack_packet.seq_num = synack_packet.seq_num; // the squence number of the expected
 
-    // Send ACK packet
-    if (rudp_send(sockfd, &ack_packet, dest_addr, addrlen) < 0) {
-        perror("sendto failed");
-        return -1;
-    }
 
-    printf("Sent ACK packet %d\n", ack_packet.seq_num);
+//    ack_packet.length = htons(0); // No data in ACK packet
+//    ack_packet.flags = FLAG_ACK;
+//    ack_packet.seq_num = synack_packet.seq_num; // the squence number of the expected
 
-    while (rudp_rcv_with_timer(sockfd, &synack_packet, dest_addr, &addrlen, TIMEOUT * 2)) {
-        RudpPacket reack_packet;
-        reack_packet.length = htons(0); // No data in ACK packet
-        reack_packet.flags = FLAG_ACK;
-        reack_packet.seq_num = synack_packet.seq_num; // the squence number of the expected
-
-        // Send ACK packet
-        if (rudp_send(sockfd, &reack_packet, dest_addr, sizeof(addrlen)) < 0) {
-            perror("sendto failed");
-            return -1;
-        }
-    }
+//    // Send ACK packet
+//    if (rudp_send(sockfd, &ack_packet, dest_addr, addrlen) < 0) {
+//        perror("sendto failed");
+//        return -1;
+//    }
+//
+//    printf("Sent ACK packet %d\n", ack_packet.seq_num);
+//
+//    while (rudp_rcv_with_timer(sockfd, &synack_packet, dest_addr, &addrlen, TIMEOUT * 2)) {
+//        if (!(synack_packet.flags & FLAG_SYN) || !(synack_packet.flags & FLAG_ACK)) {
+//            break;
+//        }
+//        ack_packet.length = htons(0); // No data in ACK packet
+//        ack_packet.flags = FLAG_ACK;
+//        ack_packet.seq_num = synack_packet.seq_num; // the squence number of the expected
+//
+//        // Send ACK packet
+//        if (rudp_send(sockfd, &ack_packet, dest_addr, sizeof(addrlen)) < 0) {
+//            perror("sendto failed");
+//            return -1;
+//        }
+//    }
     puts("Handshake successful!");
 
     return 0; // Handshake successful
@@ -284,7 +292,7 @@ int rudp_accept(int sockfd, struct sockaddr_in *dest_addr, socklen_t addrlen) {
     socklen_t *len = &addrlen;
 
     // Receive SYN packet
-    int status = rudp_rcv_with_timer(sockfd, &syn_packet, dest_addr, len, 10000000); // Wait 10 secs, if no SYN close.
+    int status = rudp_rcv_with_timer(sockfd, &syn_packet, dest_addr, len, MAX_WAIT_TIME); // Wait 10 secs, if no SYN close.
     if (status < 0) {
         perror("rcv failed");
         return -1;
@@ -300,15 +308,32 @@ int rudp_accept(int sockfd, struct sockaddr_in *dest_addr, socklen_t addrlen) {
         synack_packet.seq_num = syn_packet.seq_num;
         // Send SYNACK packet
         //printf("Sending SYNACK packet\n");
-        if (rudp_send_with_timer(sockfd, &synack_packet, dest_addr, addrlen, TIMEOUT) < 0) {
+        if (rudp_send(sockfd, &synack_packet, dest_addr, addrlen) < 0) {
             perror("sendto failed");
             return -1;
         }
-        return 0;
     } else {
         perror("Invalid SYN packet\n");
         return -1; // Handshake failed
     }
+
+    // wait for retransmit of SYN
+    while (rudp_rcv_with_timer(sockfd, &syn_packet, dest_addr, len, TIMEOUT*2)) {
+        if (!(syn_packet.flags & FLAG_SYN)) {
+            break;
+        }
+        synack_packet.length = htons(0); // No data in ACK packet
+        synack_packet.flags = FLAG_ACK + FLAG_SYN;
+        synack_packet.seq_num = syn_packet.seq_num;
+        // Send SYNACK packet
+        //printf("Sending SYNACK packet\n");
+        if (rudp_send(sockfd, &synack_packet, dest_addr, addrlen) < 0) {
+            perror("sendto failed");
+            return -1;
+        }
+    }
+
+    return 0;
 }
 
 int rudp_close_sender(int sockfd, struct sockaddr_in receiver_addr) {
