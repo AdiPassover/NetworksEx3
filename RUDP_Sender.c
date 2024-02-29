@@ -76,14 +76,7 @@ int main(int argc, char *argv[]) {
 
     char* file = util_generate_random_data(FILE_SIZE);
 
-//    struct timeval tv = {5,0};
-//    if (setsockopt(sockfd,SOL_SOCKET,SO_RCVTIMEO,(char*)&tv,sizeof(tv)) == -1) { // checking the server is online
-//        puts("server is offline");
-//        perror("setsockopt(2)");
-//        close(sockfd);
-//        return 1;
-//    }
-//    puts("server is online");
+
 
     // Perform handshake
     int seqnum = rudp_connect(sockfd, &receiver_addr, sizeof(receiver_addr));
@@ -135,9 +128,9 @@ int main(int argc, char *argv[]) {
     // Wait for the FIN from receiver
     RudpPacket last_packet;
     socklen_t len = sizeof(receiver_addr);
-    if (rudp_rcv(sockfd, &last_packet, &receiver_addr, &len) < 0) {
-        perror("recvfrom failed");
-        return -1;
+    ssize_t bytes_recv = rudp_rcv(sockfd, &last_packet, &receiver_addr, &len);
+    while (bytes_recv < 0) {
+        bytes_recv = rudp_rcv(sockfd, &last_packet, &receiver_addr, &len);
     }
     if (!(last_packet.flags & FLAG_FIN)) {
         perror("last packet received needs to be FIN");
@@ -165,7 +158,6 @@ int main(int argc, char *argv[]) {
         last_packet.flags = FLAG_ACK;
         if (rudp_send(sockfd, &last_packet, &receiver_addr, sizeof(receiver_addr)) < 0) {
             perror("sendto failed");
-            //free(packet);
             return -1;
         }
     }

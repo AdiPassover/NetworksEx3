@@ -12,6 +12,8 @@
 #define FILE_SIZE 2000000
 
 int main(int argc, char *argv[]) {
+    char file[FILE_SIZE] = {0};
+    char* current = &file[0];
     puts("Starting Receiver...\n");
     if (argc != 3)
     {
@@ -35,7 +37,7 @@ int main(int argc, char *argv[]) {
     // Bind socket to port
     memset(&receiver_addr, 0, sizeof(receiver_addr));
     receiver_addr.sin_family = AF_INET;
-    receiver_addr.sin_addr.s_addr = inet_addr("127.0.0.1");;
+    receiver_addr.sin_addr.s_addr = inet_addr("127.0.0.1");
     receiver_addr.sin_port = htons(port);
     if (bind(sockfd, (struct sockaddr *)&receiver_addr, sizeof(receiver_addr)) < 0)
     {
@@ -74,7 +76,7 @@ int main(int argc, char *argv[]) {
         //if the packet is not the expected one or the checksum is not correct, ask for retransmission
         if (packet.seq_num != seqnum || calculate_checksum(packet.data, packet.length) != packet.checksum) {
             packet.seq_num = seqnum-1;
-            printf("Packet had error. Sending ACK %d\n",packet.seq_num);
+            printf("Packet had error. Sending ACK With previous seqnum %d\n",packet.seq_num);
             rudp_send(sockfd, &packet, &sender_addr, sizeof(sender_addr));
         }
         else //if the packet is the expected one and the checksum is correct, send an ack, and update the sequence number for the next packet
@@ -84,11 +86,17 @@ int main(int argc, char *argv[]) {
             printf("Packet is good. Sending ACK %d\n",packet.seq_num);
             rudp_send(sockfd, &packet, &sender_addr, sizeof(sender_addr));
             seqnum++;
+            char* data = packet.data;
+            for (int i = 0; i < packet.length; i++) {
+               *current=data[i];
+                current++;
+            }
         }
     }
     packet.flags = FLAG_ACK;
     rudp_send(sockfd, &packet, &sender_addr, sizeof(sender_addr));
     puts("Sent ACK for FIN");
+
     // wait a little to ensure no FIN retransmission
     while (rudp_rcv_with_timer(sockfd,&packet,&sender_addr,&sender_addr_len,TIMEOUT*2)) {
         packet.flags = FLAG_ACK;
@@ -97,10 +105,9 @@ int main(int argc, char *argv[]) {
     }
     if (rudp_close(sockfd, &sender_addr, sizeof(sender_addr))==-1) {
         perror("close failed");
-        //free(packet);
         return -1;
     }
-    //free(packet);
+
 
     puts("Receiver finished successfully");
     close(sockfd);

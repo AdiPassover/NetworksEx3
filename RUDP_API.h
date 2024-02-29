@@ -26,7 +26,10 @@ typedef struct _RudpPacket {
     uint8_t flags;
     int seq_num;
     char data[MAXLINE];
+
 } RudpPacket;
+
+
 /*
  * Creating a RUDP socket and creating a handshake between two peers.
  */

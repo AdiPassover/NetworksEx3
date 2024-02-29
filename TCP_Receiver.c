@@ -88,18 +88,22 @@ int main(int argc, char* argv[]) {
         }
         puts("Sender connected, beginning to receive file...\n");
         char buffer[FILE_SIZE] = {0};
-        int totalRecv = 0;
+        char data[FILE_SIZE] = {0};
+        ssize_t totalRecv = 0;
         int first = 1;
         while (currentRun < MAX_RUNS) {
-            int bytes_received = recv(client_sock, buffer, FILE_SIZE, 0);
+            ssize_t bytes_received = recv(client_sock, buffer, FILE_SIZE, 0);
             gettimeofday(&end, NULL);
             if (first) {
                 start.tv_sec = recreateNumber(buffer,0);
                 start.tv_usec = recreateNumber(buffer,32);
                 first = 0;
+                strcpy(data, buffer+64);
+            } else {
+                strcpy(data+totalRecv-64, buffer);
             }
-            //printf("bytes: %d\n",bytes_received);
             totalRecv += bytes_received;
+
             if (buffer[0]=='e'&&buffer[1]=='x'&&buffer[2]=='i'&&buffer[3]=='t' && bytes_received < 10) {
                 puts("Sender sent exit message.\n");
                 printStats(times, speeds, currentRun,algo);
