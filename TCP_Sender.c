@@ -42,9 +42,9 @@ int main(int argc, char *argv[]) {
     char *file = util_generate_random_data(FILE_SIZE);
     puts("Starting Sender...\n");
 
-    char *SERVER_IP = (char *) malloc(sizeof(char) * (16));
+    char SERVER_IP[20] = {0};
     int port;
-    char *algo = (char *) malloc(sizeof(char) * 10);
+    char algo[10] = {0};
     if (argc != 7) {
         puts("invalid command");
         return 1;
@@ -64,32 +64,34 @@ int main(int argc, char *argv[]) {
     socketfd = socket(AF_INET, SOCK_STREAM, 0);
     if (socketfd == -1) {
         perror("socket(2)");
-        free(SERVER_IP);
-        free(algo);
+        free(file);
+
         exit(1);
     }
 
     // Setting the CC algo to the input algo.
     if (setsockopt(socketfd, IPPROTO_TCP, TCP_CONGESTION, algo, strlen(algo)) != 0) {
         perror("setsockopt(2)");
-        free(SERVER_IP);
-        free(algo);
+        free(file);
+
         exit(1);
     }
-    free(algo);
+
 
 
     if (inet_pton(AF_INET, SERVER_IP, &senderAdress.sin_addr) <= 0) { // setting up the IP address
         perror("inet_pton(3)");
         close(socketfd);
-        free(SERVER_IP);
+        free(file);
+
         return 1;
     }
     if (connect(socketfd, (struct sockaddr *) &senderAdress, sizeof(senderAdress)) < 0) { // connecting to receiver
         puts("failed");
         perror("connect(2)");
         close(socketfd);
-        free(SERVER_IP);
+        free(file);
+
         return 1;
     }
 
@@ -105,7 +107,8 @@ int main(int argc, char *argv[]) {
     if (bytes_sent <= 0) {
         perror("send(2)");
         close(socketfd);
-        free(SERVER_IP);
+        free(file);
+
         return 1;
     }
     puts("file sent");
@@ -127,7 +130,7 @@ int main(int argc, char *argv[]) {
             if (bytes_sent <= 0) {
                 perror("send(2)");
                 close(socketfd);
-                free(SERVER_IP);
+                free(file);
                 return 1;
             }
             gettimeofday(&end, NULL);
@@ -145,11 +148,11 @@ int main(int argc, char *argv[]) {
     {
         perror("send(2)");
         close(socketfd);
-        free(SERVER_IP);
+        free(file);
+
         return 1;
     }
     close(socketfd);
-    free(SERVER_IP);
     free(file);
     return 0;
 }

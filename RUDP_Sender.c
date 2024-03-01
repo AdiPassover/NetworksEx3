@@ -31,6 +31,9 @@ char *util_generate_random_data(unsigned int size) {
 }
 
 int main(int argc, char *argv[]) {
+
+
+    struct timeval start, end;
     puts("Starting Sender...\n");
 
     if (argc != 5) {
@@ -69,20 +72,29 @@ int main(int argc, char *argv[]) {
 
     char *file = util_generate_random_data(FILE_SIZE);
     int status = 1;
+
     while (status == 1) {
         // Perform handshake
         int seqnum = rudp_connect(sockfd, &receiver_addr, sizeof(receiver_addr), 0);
-        if (seqnum < 0) {
+        if (seqnum == -1) {
             perror("connection failed");
             return -1;
+        } else if (seqnum == -2) {
+            perror("Server can't receive packets.");
+            break;
         }
         puts("Connected successfully");
 
+        gettimeofday(&start,NULL);
         // Send data
         if (rudp_send_file(file, sockfd, receiver_addr, seqnum) < 0) {
             perror("send file failed");
             return -1;
         }
+        gettimeofday(&end,NULL);
+        double timeTaken = (end.tv_sec - start.tv_sec) * 1000.0;
+        timeTaken += (end.tv_usec - start.tv_usec) / 1000.0;
+        printf("time taken: %0.3lf ms\n",timeTaken);
 
         puts("Finished sending data. Closing connection");
         //finish sending, and receive the last ack, close the rudp connection

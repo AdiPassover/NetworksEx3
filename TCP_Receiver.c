@@ -137,6 +137,10 @@ int main(int argc, char* argv[]) {
 }
 
 void printStats(double times[100], double speeds[100], int run, char* algo) {
+    if (run ==0){
+        puts("No runs were completed.");
+        return;
+    }
     double timeSum = 0;
     double speedSum = 0;
     double avgTime = 0;
@@ -157,7 +161,7 @@ void printStats(double times[100], double speeds[100], int run, char* algo) {
     printf("(*) Number of runs: %d\n", run-1);
     printf("(*) Average RTT: %0.3lf ms\n", avgTime);
     printf("(*) Average throughput: %0.3lf MB/s\n", avgSpeed);
-    printf("(*) Total time: %0.3lf MB/s\n", timeSum);
+    printf("(*) Total time: %0.3lf ms\n", timeSum);
     printf("--------------------------------------------\n");
 
 }

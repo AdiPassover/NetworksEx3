@@ -30,7 +30,7 @@ void printStats(double times[100], int run) {
     printf("(*) Number of runs: %d\n", run-1);
     printf("(*) Average RTT: %0.3lf ms\n", avgTime);
     printf("(*) Average throughput: %0.3lf MB/s\n", avgSpeed);
-    printf("(*) Total time: %0.3lf MB/s\n", timeSum);
+    printf("(*) Total time: %0.3lf ms\n", timeSum);
     printf("--------------------------------------------\n");
 
 }

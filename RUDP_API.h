@@ -15,6 +15,7 @@
 #define MAXLINE 2048
 #define FILE_SIZE 2000000
 #define MAX_RUNS 100
+#define MAX_WAIT_TIME 10000000
 
 #define FLAG_ACK 1
 #define FLAG_SYN 2
@@ -45,38 +46,10 @@ int rudp_rcv_file(char* file, int sockfd, struct sockaddr_in receiver_addr, int 
  */
 int rudp_socket();
 
-/*
- * Sending data to the peer. Return the bits sent.
- */
-ssize_t rudp_send(int sockfd, const RudpPacket *rudp_packet, struct sockaddr_in *serv_addr, socklen_t addrlen);
-
-/*
- * Sending data to the peer. The function should wait for an acknowledgment packet,
- * and if it didn’t receive any in timeout microseconds, retransmits the data.
- * Return the bits sent.
- */
-ssize_t rudp_send_with_timer(int sockfd, const RudpPacket *rudp_packet, struct sockaddr_in *serv_addr, socklen_t addrlen, int timeout);
-
-/*
- * Receive data from a peer.
- */
-ssize_t rudp_rcv(int socketfd, RudpPacket *rudp_packet, struct sockaddr_in *src_addr, socklen_t *addrlen);
-
-/*
- * Receive data from a peer.
- * If no data received in timeout microseconds returns 0.
- */
-int rudp_rcv_with_timer(int sockfd, RudpPacket *rudp_packet, struct sockaddr_in *src_addr, socklen_t *addrlen, int timeout);
-
-/*
- * Accept a connection from a peer
- * Returns -1 if failure.
- */
-int rudp_accept(int sockfd, struct sockaddr_in *dest_addr, socklen_t addrlen);
 
 /*
  * Offer a handshake in order to establish a connection with a peer.
- * Returns -1 if failure.
+ * Returns -1 if failure. Returns -2 if no answer.
  */
 int rudp_connect(int sockfd, struct sockaddr_in *dest_addr, socklen_t addrlen, int side);
 
@@ -86,16 +59,3 @@ int rudp_connect(int sockfd, struct sockaddr_in *dest_addr, socklen_t addrlen, i
  */
 int rudp_close(int sockfd, struct sockaddr_in *dest_addr, socklen_t addrlen, int side);
 
-/*
-* @brief A checksum function that returns 16 bit checksum for data.
-* @param data The data to do the checksum for.
-* @param bytes The length of the data in bytes.
-* @return The checksum itself as 16 bit unsigned number.
-* @note This function is taken from RFC1071, can be found here:
-* @note https://tools.ietf.org/html/rfc1071
-* @note It is the simplest way to calculate a checksum and is not very strong.
-* However, it is good enough for this assignment.
-* @note You are free to use any other checksum function as well.
-* You can also use this function as such without any change.
-*/
-unsigned short int calculate_checksum(void *data, unsigned int bytes);
